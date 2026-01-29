@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
 import '../widgets/bottom_nav.dart';
+import '../state/app_state.dart';
 import 'login_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
@@ -7,6 +10,9 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    final appState = AppState.instance;
+
     return Scaffold(
       bottomNavigationBar: const BottomNav(currentIndex: 3),
       body: SafeArea(
@@ -31,15 +37,30 @@ class ProfileScreen extends StatelessWidget {
                       child: const Icon(Icons.person, size: 60),
                     ),
                     const SizedBox(height: 16),
-                    const Text(
-                      'Level 3',
-                      style: TextStyle(
+
+                    Text(
+                      user?.displayName ?? 'Welcome',
+                      style: const TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    const Text('5 day streak 🔥'),
+
+                    const SizedBox(height: 6),
+
+                    Text(
+                      user?.email ?? '',
+                      style: TextStyle(
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    Text(
+                      '🔥 ${appState.streak}-day streak',
+                      style: const TextStyle(fontWeight: FontWeight.w500),
+                    ),
                   ],
                 ),
               ),
@@ -48,12 +69,15 @@ class ProfileScreen extends StatelessWidget {
 
               // STATS ROW
               Row(
-                children: const [
+                children: [
                   Expanded(
-                    child: _StatCard(title: 'Points', value: '120'),
+                    child: _StatCard(
+                      title: 'Points',
+                      value: appState.points.toString(),
+                    ),
                   ),
-                  SizedBox(width: 12),
-                  Expanded(
+                  const SizedBox(width: 12),
+                  const Expanded(
                     child: _StatCard(title: 'Badges', value: '6'),
                   ),
                 ],
@@ -89,9 +113,9 @@ class ProfileScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
 
-              _HighlightCard(text: 'Logged movement 4 times'),
-              _HighlightCard(text: 'Improved food score'),
-              _HighlightCard(text: 'Completed 2 mindfulness sessions'),
+              const _HighlightCard(text: 'Logged movement 4 times'),
+              const _HighlightCard(text: 'Improved food score'),
+              const _HighlightCard(text: 'Completed 2 mindfulness sessions'),
 
               const SizedBox(height: 24),
 
@@ -105,13 +129,16 @@ class ProfileScreen extends StatelessWidget {
 
               const SizedBox(height: 8),
 
+              // SIGN OUT
               ListTile(
                 leading: const Icon(Icons.logout, color: Colors.red),
                 title: const Text(
                   'Sign Out',
                   style: TextStyle(color: Colors.red),
                 ),
-                onTap: () {
+                onTap: () async {
+                  await FirebaseAuth.instance.signOut();
+
                   Navigator.pushAndRemoveUntil(
                     context,
                     MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -143,9 +170,10 @@ class _StatCard extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(value,
-              style:
-                  const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          Text(
+            value,
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 4),
           Text(title),
         ],

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
-import 'screens/login_screen.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'screens/welcome_screen.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp();
   runApp(const PCOSApp());
 }
 
@@ -13,7 +16,7 @@ class PCOSApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'PCOS App',
-      home: const LoginScreen(),
+      home: const WelcomeScreen(),
     );
   }
 }
