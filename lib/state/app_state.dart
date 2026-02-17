@@ -148,4 +148,31 @@ class AppState {
       moodLoggedToday = true;
     }
   }
+
+  // ---------- QUESTS & ACHIEVEMENTS ----------
+
+  List<String> dailyQuests = [
+    'Log movement',
+    'Drink 4 glasses of water',
+    'Log a meal',
+  ];
+
+  Set<String> completedQuests = {};
+  Set<String> achievements = {'First Movement'};
+
+  void toggleQuest(String quest) {
+    if (completedQuests.contains(quest)) {
+      completedQuests.remove(quest);
+      points -= 10;
+      if (points < 0) points = 0;
+    } else {
+      completedQuests.add(quest);
+      points += 10;
+    }
+  }
+
+  void unlockAchievement(String achievement) {
+    achievements.add(achievement);
+  }
+
 }

@@ -22,16 +22,24 @@ class _MealsScreenState extends State<MealsScreen> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text('Log ${mealType.name}'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: controllers.entries.map((e) {
             return Padding(
-              padding: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.only(bottom: 12),
               child: TextField(
                 controller: e.value,
                 keyboardType: TextInputType.number,
-                decoration: InputDecoration(labelText: '${e.key} (g)'),
+                decoration: InputDecoration(
+                  labelText: '${e.key} (g)',
+                  filled: true,
+                  fillColor: Colors.grey.shade100,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
               ),
             );
           }).toList(),
@@ -44,7 +52,7 @@ class _MealsScreenState extends State<MealsScreen> {
               });
               Navigator.pop(context);
             },
-            child: const Text('Reset Meal', style: TextStyle(color: Colors.red)),
+            child: const Text('Reset', style: TextStyle(color: Colors.red)),
           ),
           ElevatedButton(
             onPressed: () {
@@ -70,42 +78,79 @@ class _MealsScreenState extends State<MealsScreen> {
     );
   }
 
-  Widget _mealSection(String title, MealType type) {
+  Widget _mealCard(String title, MealType type, List<Color> gradient) {
     final state = AppState.instance;
     final entries = state.mealsToday[type]!;
     final score = state.calculateMealScore(type);
     final points = state.calculateMealPoints(type);
 
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.grey.shade300,
-        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          colors: gradient,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.15),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // HEADER
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+              Text(
+                title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               IconButton(
-                icon: const Icon(Icons.add),
+                icon: const Icon(Icons.add_circle, color: Colors.white),
                 onPressed: () => _showMealDialog(type),
               ),
             ],
           ),
 
+          const SizedBox(height: 8),
+
           if (entries.isEmpty)
-            const Text('No entries yet')
+            const Text(
+              'Tap + to log your meal',
+              style: TextStyle(color: Colors.white70),
+            )
           else ...[
             ...entries.entries.map(
-              (e) => Text('${e.key} • ${e.value}g'),
+              (e) => Text(
+                '${e.key} • ${e.value}g',
+                style: const TextStyle(color: Colors.white),
+              ),
             ),
-            const SizedBox(height: 6),
-            Text(
-              'Rating: $score / 3  •  +$points points',
-              style: const TextStyle(fontWeight: FontWeight.w600),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.25),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                '⭐ Rating: $score / 3  •  +$points pts',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
           ],
         ],
@@ -118,35 +163,48 @@ class _MealsScreenState extends State<MealsScreen> {
     final state = AppState.instance;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Meals')),
+      appBar: AppBar(
+        title: const Text('Meals'),
+        backgroundColor: Colors.deepPurple,
+        foregroundColor: Colors.white,
+      ),
       bottomNavigationBar: const BottomNav(currentIndex: 1),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16),
+            // STREAK + POINTS
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.deepPurple.shade50,
+                borderRadius: BorderRadius.circular(16),
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Streak: ${state.streak} 🔥'),
-                  Text('Points: ${state.points} ⭐'),
+                  Text('🔥 Streak: ${state.streak}',
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  Text('⭐ Points: ${state.points}',
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
                 ],
               ),
             ),
 
+            const SizedBox(height: 16),
+
             Expanded(
               child: Row(
                 children: [
-                  // Water bar
+                  // WATER BAR
                   Column(
                     children: [
                       Expanded(
                         child: Container(
-                          width: 40,
+                          width: 48,
                           decoration: BoxDecoration(
-                            color: Colors.grey.shade300,
-                            borderRadius: BorderRadius.circular(20),
+                            color: Colors.blue.shade100,
+                            borderRadius: BorderRadius.circular(24),
                           ),
                           child: Align(
                             alignment: Alignment.bottomCenter,
@@ -155,14 +213,15 @@ class _MealsScreenState extends State<MealsScreen> {
                               child: Container(
                                 decoration: BoxDecoration(
                                   color: Colors.blue,
-                                  borderRadius: BorderRadius.circular(20),
+                                  borderRadius: BorderRadius.circular(24),
                                 ),
                               ),
                             ),
                           ),
                         ),
                       ),
-                      Text('${state.waterGlasses}/8'),
+                      const SizedBox(height: 8),
+                      Text('${state.waterGlasses}/8 💧'),
                       IconButton(
                         icon: const Icon(Icons.add),
                         onPressed: () => setState(state.addWaterGlass),
@@ -179,11 +238,23 @@ class _MealsScreenState extends State<MealsScreen> {
                   Expanded(
                     child: Column(
                       children: [
-                        _mealSection('Breakfast', MealType.breakfast),
+                        _mealCard(
+                          'Breakfast',
+                          MealType.breakfast,
+                          const [Color(0xFFF7971E), Color(0xFFFFD200)],
+                        ),
                         const SizedBox(height: 12),
-                        _mealSection('Lunch', MealType.lunch),
+                        _mealCard(
+                          'Lunch',
+                          MealType.lunch,
+                          const [Color(0xFF56CCF2), Color(0xFF2F80ED)],
+                        ),
                         const SizedBox(height: 12),
-                        _mealSection('Dinner', MealType.dinner),
+                        _mealCard(
+                          'Dinner',
+                          MealType.dinner,
+                          const [Color(0xFF9D50BB), Color(0xFF6E48AA)],
+                        ),
                       ],
                     ),
                   ),

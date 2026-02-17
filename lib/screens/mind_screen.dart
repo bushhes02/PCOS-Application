@@ -23,12 +23,14 @@ class _MindScreenState extends State<MindScreen> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: const Text('How are you feeling today?'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: moods.entries.map((e) {
             return ListTile(
-              title: Text('${e.value}  ${e.key}'),
+              leading: Text(e.value, style: const TextStyle(fontSize: 22)),
+              title: Text(e.key),
               onTap: () {
                 setState(() {
                   AppState.instance.logMood(e.key);
@@ -47,25 +49,42 @@ class _MindScreenState extends State<MindScreen> {
     final state = AppState.instance;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Mind')),
+      appBar: AppBar(
+        title: const Text('Mind'),
+        backgroundColor: Colors.deepPurple,
+        foregroundColor: Colors.white,
+      ),
       bottomNavigationBar: const BottomNav(currentIndex: 2),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // Streak + Points
-            Padding(
-              padding: const EdgeInsets.only(bottom: 16),
+            // STREAK + POINTS
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.deepPurple.shade50,
+                borderRadius: BorderRadius.circular(16),
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Streak: ${state.streak} 🔥'),
-                  Text('Points: ${state.points} ⭐'),
+                  Text('🔥 Streak: ${state.streak}',
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
+                  Text('⭐ Points: ${state.points}',
+                      style: const TextStyle(fontWeight: FontWeight.w600)),
                 ],
               ),
             ),
 
-            _LargeCard(title: 'Daily Affirmation'),
+            const SizedBox(height: 16),
+
+            // DAILY AFFIRMATION
+            const _SoftLargeCard(
+              icon: Icons.favorite,
+              title: 'Daily Affirmation',
+              subtitle: 'A gentle reminder for today',
+            ),
 
             const SizedBox(height: 16),
 
@@ -74,23 +93,39 @@ class _MindScreenState extends State<MindScreen> {
                 Expanded(
                   child: GestureDetector(
                     onTap: _showMoodDialog,
-                    child: _Card(
+                    child: _ActionCard(
                       title: state.todayMood == null
-                          ? 'Mood Tracker'
+                          ? 'Log Mood'
                           : 'Mood: ${state.todayMood}',
+                      icon: Icons.add_reaction,
+                      gradient: const [
+                        Color(0xFF9D50BB),
+                        Color(0xFF6E48AA),
+                      ],
                     ),
                   ),
                 ),
                 const SizedBox(width: 12),
-                Expanded(
-                  child: _Card(title: 'Gratitude Journal'),
+                const Expanded(
+                  child: _ActionCard(
+                    title: 'Gratitude Journal',
+                    icon: Icons.add_circle_outline,
+                    gradient: [
+                      Color(0xFFB993D6),
+                      Color(0xFF8CA6DB),
+                    ],
+                  ),
                 ),
               ],
             ),
 
             const SizedBox(height: 16),
 
-            _LargeCard(title: 'Reflection / Notes'),
+            const _SoftLargeCard(
+              icon: Icons.edit_note,
+              title: 'Reflection / Notes',
+              subtitle: 'Write freely and reflect',
+            ),
           ],
         ),
       ),
@@ -98,31 +133,71 @@ class _MindScreenState extends State<MindScreen> {
   }
 }
 
-class _Card extends StatelessWidget {
+/* ---------- ACTION CARD ---------- */
+
+class _ActionCard extends StatelessWidget {
   final String title;
-  const _Card({required this.title});
+  final IconData icon;
+  final List<Color> gradient;
+
+  const _ActionCard({
+    required this.title,
+    required this.icon,
+    required this.gradient,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 110,
+      height: 120,
       decoration: BoxDecoration(
-        color: Colors.grey.shade300,
-        borderRadius: BorderRadius.circular(16),
+        gradient: LinearGradient(
+          colors: gradient,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.deepPurple.withOpacity(0.25),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Center(
-        child: Text(
-          title,
-          textAlign: TextAlign.center,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 36, color: Colors.white),
+            const SizedBox(height: 8),
+            Text(
+              title,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _LargeCard extends StatelessWidget {
+/* ---------- SOFT LARGE CARD ---------- */
+
+class _SoftLargeCard extends StatelessWidget {
+  final IconData icon;
   final String title;
-  const _LargeCard({required this.title});
+  final String subtitle;
+
+  const _SoftLargeCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -130,13 +205,36 @@ class _LargeCard extends StatelessWidget {
       height: 140,
       width: double.infinity,
       decoration: BoxDecoration(
-        color: Colors.grey.shade300,
-        borderRadius: BorderRadius.circular(16),
+        color: Colors.deepPurple.shade50,
+        borderRadius: BorderRadius.circular(20),
       ),
-      child: Center(
-        child: Text(
-          title,
-          textAlign: TextAlign.center,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 28,
+              backgroundColor: Colors.deepPurple.shade200,
+              child: Icon(icon, color: Colors.white),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: const TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  Text(
+                    subtitle,
+                    style: TextStyle(color: Colors.grey.shade700),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
