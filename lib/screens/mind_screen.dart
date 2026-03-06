@@ -4,239 +4,539 @@ import '../state/app_state.dart';
 
 class MindScreen extends StatefulWidget {
   const MindScreen({super.key});
-
   @override
   State<MindScreen> createState() => _MindScreenState();
 }
 
 class _MindScreenState extends State<MindScreen> {
-  void _showMoodDialog() {
-    final moods = {
-      'Happy': '😊',
-      'Sad': '😔',
-      'Angry': '😠',
-      'Anxious': '😰',
-      'Calm': '😌',
-      'Tired': '😴',
-    };
+  final state = AppState.instance;
 
-    showDialog(
+  // ── Mood popup ────────────────────────────────────────
+  void _showMoodPicker() {
+    showModalBottomSheet(
       context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text('How are you feeling today?'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: moods.entries.map((e) {
-            return ListTile(
-              leading: Text(e.value, style: const TextStyle(fontSize: 22)),
-              title: Text(e.key),
-              onTap: () {
-                setState(() {
-                  AppState.instance.logMood(e.key);
-                });
-                Navigator.pop(context);
-              },
-            );
-          }).toList(),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('How are you feeling today?',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 20),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: AppState.moodOptions.map((mood) {
+              final isSelected = state.todayMood == mood['label'];
+              return GestureDetector(
+                onTap: () {
+                  setState(() => state.logMood(mood['label']!));
+                  Navigator.pop(context);
+                },
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                  decoration: BoxDecoration(
+                    color: isSelected ? Colors.deepPurple.shade100 : Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isSelected ? Colors.deepPurple : Colors.transparent, width: 2),
+                  ),
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Text(mood['emoji']!, style: const TextStyle(fontSize: 30)),
+                    const SizedBox(height: 6),
+                    Text(mood['label']!, style: TextStyle(fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: isSelected ? Colors.deepPurple.shade700 : Colors.grey.shade600)),
+                  ]),
+                ),
+              );
+            }).toList(),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  // ── Sleep popup ───────────────────────────────────────
+  void _showSleepPicker() {
+    double selectedHours = state.sleepHours ?? 7.0;
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheet) => Padding(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Text('How many hours did you sleep?',
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 20),
+            Text('${selectedHours.toStringAsFixed(1)} hrs',
+                style: TextStyle(fontSize: 42, fontWeight: FontWeight.w800,
+                    color: Colors.deepPurple.shade700)),
+            Slider(
+              value: selectedHours, min: 0, max: 12, divisions: 24,
+              activeColor: Colors.deepPurple,
+              label: '${selectedHours.toStringAsFixed(1)} hrs',
+              onChanged: (v) => setSheet(() => selectedHours = v),
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.deepPurple, foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
+                onPressed: () {
+                  setState(() => state.logSleep(selectedHours));
+                  Navigator.pop(context);
+                },
+                child: const Text('Save', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+              ),
+            ),
+          ]),
         ),
       ),
     );
   }
 
+  // ── Journal ───────────────────────────────────────────
+  bool _isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  void _openJournalForDate(DateTime date) {
+    final isToday = _isSameDay(date, DateTime.now());
+    final existing = state.getEntryForDate(date);
+    Navigator.push(context, MaterialPageRoute(
+      builder: (_) => _JournalScreen(
+        date: date,
+        initialText: existing?.text ?? '',
+        existingEntry: existing,
+        readOnly: !isToday,
+        onSave: isToday ? (text) => setState(() => state.saveJournalEntry(text)) : null,
+        onDelete: isToday ? (entry) => setState(() => state.deleteJournalEntry(entry)) : null,
+      ),
+    )).then((_) => setState(() {}));
+  }
+
   @override
   Widget build(BuildContext context) {
-    final state = AppState.instance;
-
     return Scaffold(
+      backgroundColor: Colors.grey.shade50,
       appBar: AppBar(
-        title: const Text('Mind'),
+        title: const Text('Mind', style: TextStyle(fontWeight: FontWeight.w700)),
         backgroundColor: Colors.deepPurple,
         foregroundColor: Colors.white,
-      ),
-      bottomNavigationBar: const BottomNav(currentIndex: 2),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            // STREAK + POINTS
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.deepPurple.shade50,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text('🔥 Streak: ${state.streak}',
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
-                  Text('⭐ Points: ${state.points}',
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 16),
-
-            // DAILY AFFIRMATION
-            const _SoftLargeCard(
-              icon: Icons.favorite,
-              title: 'Daily Affirmation',
-              subtitle: 'A gentle reminder for today',
-            ),
-
-            const SizedBox(height: 16),
-
-            Row(
-              children: [
-                Expanded(
-                  child: GestureDetector(
-                    onTap: _showMoodDialog,
-                    child: _ActionCard(
-                      title: state.todayMood == null
-                          ? 'Log Mood'
-                          : 'Mood: ${state.todayMood}',
-                      icon: Icons.add_reaction,
-                      gradient: const [
-                        Color(0xFF9D50BB),
-                        Color(0xFF6E48AA),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: _ActionCard(
-                    title: 'Gratitude Journal',
-                    icon: Icons.add_circle_outline,
-                    gradient: [
-                      Color(0xFFB993D6),
-                      Color(0xFF8CA6DB),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 16),
-
-            const _SoftLargeCard(
-              icon: Icons.edit_note,
-              title: 'Reflection / Notes',
-              subtitle: 'Write freely and reflect',
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-/* ---------- ACTION CARD ---------- */
-
-class _ActionCard extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  final List<Color> gradient;
-
-  const _ActionCard({
-    required this.title,
-    required this.icon,
-    required this.gradient,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 120,
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: gradient,
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.deepPurple.withOpacity(0.25),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
+        elevation: 0,
+        actions: [
+          Container(
+            margin: const EdgeInsets.only(right: 6, top: 6, bottom: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.white.withOpacity(0.3))),
+            child: Row(children: [
+              const Text('🔥', style: TextStyle(fontSize: 16)), const SizedBox(width: 5),
+              Text('${state.streak}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Colors.white)),
+            ]),
+          ),
+          Container(
+            margin: const EdgeInsets.only(right: 14, top: 6, bottom: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
+              color: Colors.orange.withOpacity(0.35), borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.orange.withOpacity(0.5))),
+            child: Row(children: [
+              const Text('⭐', style: TextStyle(fontSize: 16)), const SizedBox(width: 5),
+              Text('${state.points}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Colors.white)),
+            ]),
           ),
         ],
       ),
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, size: 36, color: Colors.white),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              style: const TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
+      bottomNavigationBar: const BottomNav(currentIndex: 2),
+      body: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        child: Column(children: [
+          // Affirmation — small fixed height
+          _buildAffirmationCard(),
+          const SizedBox(height: 10),
+          // Mood + Sleep side by side squares
+          IntrinsicHeight(
+            child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Expanded(child: _buildMoodSquare()),
+              const SizedBox(width: 10),
+              Expanded(child: _buildSleepSquare()),
+            ]),
+          ),
+          const SizedBox(height: 10),
+          // Journal — takes all remaining space
+          Expanded(child: _buildJournalCard()),
+        ]),
       ),
     );
   }
+
+  // ── Affirmation ───────────────────────────────────────
+  Widget _buildAffirmationCard() {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.deepPurple.shade700, Colors.deepPurple.shade400],
+          begin: Alignment.topLeft, end: Alignment.bottomRight),
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [BoxShadow(color: Colors.deepPurple.withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 4))],
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Text('✨', style: TextStyle(fontSize: 11)),
+          const SizedBox(width: 6),
+          Text('DAILY AFFIRMATION', style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700,
+              letterSpacing: 1.5, color: Colors.white.withOpacity(0.7))),
+        ]),
+        const SizedBox(height: 6),
+        Text('"${state.todayAffirmation}"',
+            style: const TextStyle(fontSize: 13, color: Colors.white, fontStyle: FontStyle.italic, height: 1.4),
+            maxLines: 2, overflow: TextOverflow.ellipsis),
+      ]),
+    );
+  }
+
+  // ── Mood Square ───────────────────────────────────────
+  Widget _buildMoodSquare() {
+    final logged = state.moodLoggedToday;
+    final mood = AppState.moodOptions.firstWhere(
+      (m) => m['label'] == state.todayMood,
+      orElse: () => {'emoji': '😊', 'label': ''},
+    );
+
+    return GestureDetector(
+      onTap: _showMoodPicker,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: logged ? Colors.orange.shade200 : Colors.grey.shade200),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 2))],
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Row(children: [
+            Container(width: 30, height: 30,
+              decoration: BoxDecoration(color: Colors.orange.shade50, borderRadius: BorderRadius.circular(9)),
+              child: const Center(child: Text('😊', style: TextStyle(fontSize: 15)))),
+            const SizedBox(width: 8),
+            const Text('Mood', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+          ]),
+          const SizedBox(height: 12),
+          if (logged) ...[
+            Text(mood['emoji']!, style: const TextStyle(fontSize: 36)),
+            const SizedBox(height: 4),
+            Text(mood['label']!, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
+                color: Colors.deepPurple.shade700)),
+            Text('logged today', style: TextStyle(fontSize: 10, color: Colors.grey.shade400)),
+          ] else ...[
+            Text('--', style: TextStyle(fontSize: 36, color: Colors.grey.shade300,
+                fontWeight: FontWeight.w300)),
+            const SizedBox(height: 4),
+            Text('Tap to log', style: TextStyle(fontSize: 11, color: Colors.grey.shade400,
+                fontStyle: FontStyle.italic)),
+          ],
+        ]),
+      ),
+    );
+  }
+
+  // ── Sleep Square ──────────────────────────────────────
+  Widget _buildSleepSquare() {
+    final logged = state.sleepLoggedToday;
+    final hours = state.sleepHours;
+
+    return GestureDetector(
+      onTap: _showSleepPicker,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: logged ? Colors.indigo.shade200 : Colors.grey.shade200),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 2))],
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Row(children: [
+            Container(width: 30, height: 30,
+              decoration: BoxDecoration(color: Colors.indigo.shade50, borderRadius: BorderRadius.circular(9)),
+              child: const Center(child: Text('🌙', style: TextStyle(fontSize: 15)))),
+            const SizedBox(width: 8),
+            const Text('Sleep', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+          ]),
+          const SizedBox(height: 12),
+          if (logged && hours != null) ...[
+            Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+              Text(hours.toStringAsFixed(1),
+                  style: TextStyle(fontSize: 32, fontWeight: FontWeight.w800,
+                      color: Colors.indigo.shade700, height: 1)),
+              const SizedBox(width: 4),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text('hrs', style: TextStyle(fontSize: 13, color: Colors.indigo.shade400,
+                    fontWeight: FontWeight.w600)),
+              ),
+            ]),
+            const SizedBox(height: 4),
+            Text(state.sleepQualityLabel,
+                style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+            const SizedBox(height: 6),
+            ClipRRect(borderRadius: BorderRadius.circular(4),
+              child: LinearProgressIndicator(
+                value: state.sleepProgress,
+                backgroundColor: Colors.indigo.shade100,
+                valueColor: AlwaysStoppedAnimation(Colors.indigo.shade400),
+                minHeight: 5)),
+            const SizedBox(height: 2),
+            GestureDetector(
+              onTap: () => setState(() => state.clearSleep()),
+              child: Text('Undo', style: TextStyle(fontSize: 10,
+                  color: Colors.red.shade300, fontWeight: FontWeight.w600)),
+            ),
+          ] else ...[
+            Text('--', style: TextStyle(fontSize: 36, color: Colors.grey.shade300,
+                fontWeight: FontWeight.w300)),
+            const SizedBox(height: 4),
+            Text('Tap to log', style: TextStyle(fontSize: 11, color: Colors.grey.shade400,
+                fontStyle: FontStyle.italic)),
+          ],
+        ]),
+      ),
+    );
+  }
+
+  // ── Journal Card with Calendar ────────────────────────
+  Widget _buildJournalCard() {
+    final now = DateTime.now();
+    final firstOfMonth = DateTime(now.year, now.month, 1);
+    final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
+    final startOffset = (firstOfMonth.weekday - 1) % 7;
+    final rowCount = ((startOffset + daysInMonth) / 7).ceil();
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 2))],
+      ),
+      child: LayoutBuilder(builder: (context, constraints) {
+        const hPad = 14.0;
+        const vPad = 12.0;
+        final innerWidth  = constraints.maxWidth  - hPad * 2;
+        final innerHeight = constraints.maxHeight - vPad * 2;
+        final cellSize    = innerWidth / 7;
+        // Reserve: header(32) + gap(8) + dow-labels(16) + gap(6) = 62
+        final gridHeight  = (innerHeight - 62).clamp(0.0, double.infinity);
+        final rowHeight   = gridHeight / rowCount;
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: hPad, vertical: vPad),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            // Header
+            Row(children: [
+              Container(width: 30, height: 30,
+                decoration: BoxDecoration(color: Colors.green.shade50, borderRadius: BorderRadius.circular(9)),
+                child: const Center(child: Text('📓', style: TextStyle(fontSize: 15)))),
+              const SizedBox(width: 9),
+              const Text('Journal', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
+              const Spacer(),
+              Text('${_monthName(now.month)} ${now.year}',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade500)),
+            ]),
+            const SizedBox(height: 8),
+            // Day-of-week labels
+            Row(children: ['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d) =>
+              SizedBox(width: cellSize, child: Center(child: Text(d,
+                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+                      color: Color(0xFF555555)))))).toList()),
+            const SizedBox(height: 6),
+            // Grid
+            SizedBox(
+              height: rowHeight * rowCount,
+              child: Column(
+                children: List.generate(rowCount, (row) => SizedBox(
+                  height: rowHeight,
+                  child: Row(children: List.generate(7, (col) {
+                    final day = row * 7 + col - startOffset + 1;
+                    if (day < 1 || day > daysInMonth) return SizedBox(width: cellSize);
+
+                    final date    = DateTime(now.year, now.month, day);
+                    final isToday = day == now.day;
+                    final isFuture = date.isAfter(DateTime(now.year, now.month, now.day));
+                    final hasEntry = state.getEntryForDate(date) != null;
+                    final inner   = (rowHeight * 0.78).clamp(24.0, 46.0);
+
+                    return GestureDetector(
+                      onTap: isFuture ? null : () => _openJournalForDate(date),
+                      child: SizedBox(
+                        width: cellSize, height: rowHeight,
+                        child: Center(child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          width: inner, height: inner,
+                          decoration: BoxDecoration(
+                            color: isToday ? Colors.deepPurple
+                                : hasEntry ? Colors.deepPurple.shade50 : Colors.transparent,
+                            borderRadius: BorderRadius.circular(10),
+                            border: hasEntry && !isToday
+                                ? Border.all(color: Colors.deepPurple.shade200, width: 1.5)
+                                : null,
+                          ),
+                          child: Center(child: isToday
+                              ? Text('✏️', style: TextStyle(fontSize: inner * 0.4))
+                              : hasEntry
+                                  ? Column(mainAxisSize: MainAxisSize.min, children: [
+                                      Text('$day', style: TextStyle(
+                                          fontSize: inner * 0.34, fontWeight: FontWeight.w700,
+                                          color: Colors.deepPurple.shade700, height: 1.1)),
+                                      Container(width: 4, height: 4,
+                                          decoration: BoxDecoration(
+                                              color: Colors.deepPurple.shade300,
+                                              shape: BoxShape.circle)),
+                                    ])
+                                  : Text('$day', style: TextStyle(
+                                      fontSize: inner * 0.34, fontWeight: FontWeight.w600,
+                                      color: isFuture
+                                          ? const Color(0xFFBBBBBB)
+                                          : const Color(0xFF444444)))),
+                        )),
+                      ),
+                    );
+                  })),
+                )),
+              ),
+            ),
+          ]),
+        );
+      }),
+    );
+  }
+
+  String _monthName(int m) => const ['','January','February','March','April','May','June',
+      'July','August','September','October','November','December'][m];
 }
 
-/* ---------- SOFT LARGE CARD ---------- */
+// ── Journal Screen ────────────────────────────────────────
+class _JournalScreen extends StatefulWidget {
+  final DateTime date;
+  final String initialText;
+  final JournalEntry? existingEntry;
+  final bool readOnly;
+  final void Function(String)? onSave;
+  final void Function(JournalEntry)? onDelete;
 
-class _SoftLargeCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
+  const _JournalScreen({required this.date, required this.initialText,
+      required this.existingEntry, required this.readOnly, this.onSave, this.onDelete});
 
-  const _SoftLargeCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-  });
+  @override
+  State<_JournalScreen> createState() => _JournalScreenState();
+}
+
+class _JournalScreenState extends State<_JournalScreen> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.initialText);
+  }
+
+  @override
+  void dispose() { _controller.dispose(); super.dispose(); }
+
+  void _save() {
+    if (_controller.text.trim().isEmpty) return;
+    widget.onSave?.call(_controller.text.trim());
+    Navigator.pop(context);
+  }
+
+  void _confirmDelete() {
+    showDialog(context: context, builder: (_) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: const Text('Delete entry?'),
+      content: const Text('This will remove today\'s journal entry and deduct 5 XP.'),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        TextButton(
+          onPressed: () {
+            widget.onDelete?.call(widget.existingEntry!);
+            Navigator.pop(context);
+            Navigator.pop(context);
+          },
+          child: Text('Delete', style: TextStyle(color: Colors.red.shade400)),
+        ),
+      ],
+    ));
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 140,
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.deepPurple.shade50,
-        borderRadius: BorderRadius.circular(20),
+    return Scaffold(
+      backgroundColor: Colors.grey.shade50,
+      appBar: AppBar(
+        title: Text(_fmt(widget.date),
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+        backgroundColor: Colors.deepPurple, foregroundColor: Colors.white, elevation: 0,
+        actions: [
+          if (!widget.readOnly && widget.existingEntry != null)
+            IconButton(
+                icon: const Icon(Icons.delete_outline, color: Colors.white70),
+                onPressed: _confirmDelete),
+          if (!widget.readOnly)
+            TextButton(onPressed: _save,
+                child: const Text('Save', style: TextStyle(color: Colors.white,
+                    fontWeight: FontWeight.w700, fontSize: 15))),
+        ],
       ),
-      child: Padding(
+      body: Padding(
         padding: const EdgeInsets.all(20),
-        child: Row(
-          children: [
-            CircleAvatar(
-              radius: 28,
-              backgroundColor: Colors.deepPurple.shade200,
-              child: Icon(icon, color: Colors.white),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title,
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: TextStyle(color: Colors.grey.shade700),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+        child: widget.readOnly
+            ? (widget.existingEntry == null
+                ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    const Text('📓', style: TextStyle(fontSize: 48)),
+                    const SizedBox(height: 12),
+                    Text('No entry for this day',
+                        style: TextStyle(fontSize: 14, color: Colors.grey.shade400)),
+                  ]))
+                : Container(width: double.infinity, padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.grey.shade200)),
+                    child: SingleChildScrollView(child: Text(widget.existingEntry!.text,
+                        style: const TextStyle(fontSize: 15, height: 1.7, color: Color(0xFF333333))))))
+            : TextField(
+                controller: _controller, maxLines: null, expands: true,
+                autofocus: true, textAlignVertical: TextAlignVertical.top,
+                decoration: InputDecoration(
+                  hintText: 'Write freely — this is your space...',
+                  hintStyle: TextStyle(color: Colors.grey.shade400, fontStyle: FontStyle.italic),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: Colors.grey.shade200)),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: Colors.grey.shade200)),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(16),
+                      borderSide: const BorderSide(color: Colors.deepPurple, width: 1.5)),
+                  filled: true, fillColor: Colors.white, contentPadding: const EdgeInsets.all(16)),
+                style: const TextStyle(fontSize: 15, height: 1.6)),
       ),
     );
+  }
+
+  String _fmt(DateTime d) {
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const days   = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+    return '${days[d.weekday - 1]}, ${d.day} ${months[d.month - 1]} ${d.year}';
   }
 }
