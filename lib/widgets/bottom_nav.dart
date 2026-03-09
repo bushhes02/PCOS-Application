@@ -9,34 +9,23 @@ class BottomNav extends StatelessWidget {
   const BottomNav({super.key, required this.currentIndex});
 
   void _onTap(BuildContext context, int index) {
-    if (index == 0) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-        (route) => false,
-      );
-    }
-    if (index == 1) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const MealsScreen()),
-        (route) => false,
-      );
-    }
-    if (index == 2) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const MindScreen()),
-        (route) => false,
-      );
-    }
-    if (index == 3) {
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const ProfileScreen()),
-        (route) => false,
-      );
-    }
+    if (index == currentIndex) return;
+    final screens = [
+      const HomeScreen(),
+      const MealsScreen(),
+      const MindScreen(),
+      const ProfileScreen(),
+    ];
+    Navigator.pushAndRemoveUntil(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (_, __, ___) => screens[index],
+        transitionDuration: Duration.zero,
+        reverseTransitionDuration: Duration.zero,
+        transitionsBuilder: (_, __, ___, child) => child,
+      ),
+      (route) => false,
+    );
   }
 
   @override

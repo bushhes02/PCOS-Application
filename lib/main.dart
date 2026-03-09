@@ -2,6 +2,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'screens/welcome_screen.dart';
+import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -19,10 +20,16 @@ class PCOSApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'PCOS App',
-      home: const WelcomeScreen(),
+    return ListenableBuilder(
+      listenable: ThemeState.instance,
+      builder: (context, _) => MaterialApp(
+        debugShowCheckedModeBanner: false,
+        title: 'Ovarrior',
+        theme:     lightTheme(),
+        darkTheme:  darkTheme(),
+        themeMode: ThemeState.instance.isDark ? ThemeMode.dark : ThemeMode.light,
+        home: const WelcomeScreen(),
+      ),
     );
   }
 }

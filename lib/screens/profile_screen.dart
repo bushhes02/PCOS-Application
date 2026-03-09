@@ -1,15 +1,70 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:http/http.dart' as http;
 import '../widgets/bottom_nav.dart';
 import '../state/app_state.dart';
+import '../theme/app_theme.dart';
 import 'welcome_screen.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
 
-  static int levelFromPoints(int points) => (points / 50).floor() + 1;
-  static int pointsForNextLevel(int level) => level * 50;
-  static int pointsForCurrentLevel(int level) => (level - 1) * 50;
+class _ProfileScreenState extends State<ProfileScreen> {
+  bool _insightLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _maybeRefreshInsight();
+  }
+
+  Future<void> _maybeRefreshInsight() async {
+    final state = AppState.instance;
+    if (!state.hasEnoughDataForInsight) return;
+    if (!state.shouldRefreshInsight) return;
+
+    setState(() => _insightLoading = true);
+    try {
+      final mood7     = state.last7DaysMood;
+      final sleep7    = state.last7DaysSleep;
+      final water7    = state.last7DaysWater;
+      final movement7 = state.last7DaysMovement;
+
+      final payload = {
+        'mood_logs':     mood7.map((e) => e['mood']).toList(),
+        'sleep_logs':    sleep7.map((e) => e['hours']).toList(),
+        'water_logs':    water7.map((e) => e['glasses']).toList(),
+        'movement_logs': movement7.map((e) => e['type']).toList(),
+      };
+
+      final response = await http
+          .post(
+            Uri.parse('https://ovarrior-insight-api.onrender.com/insight'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(payload),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final insight = data['insight'] as String? ?? '';
+        if (insight.isNotEmpty) state.saveInsightCache(insight);
+      }
+    } catch (_) {
+      // Silently fail — show cached or placeholder
+    } finally {
+      if (mounted) setState(() => _insightLoading = false);
+    }
+  }
+
+  static const int xpPerLevel = 300;
+  static int levelFromPoints(int pts) => (pts / xpPerLevel).floor() + 1;
+  static int pointsForCurrentLevel(int lvl) => (lvl - 1) * xpPerLevel;
+  static int pointsForNextLevel(int lvl) => lvl * xpPerLevel;
 
   static String levelTitle(int level) {
     if (level >= 10) return 'PCOS Champion 🏆';
@@ -19,116 +74,101 @@ class ProfileScreen extends StatelessWidget {
     return 'Getting Started ✨';
   }
 
-  // 6 badges only
-  static const List<Map<String, dynamic>> allBadges = [
-    {'emoji': '🔥', 'label': '7-Day Streak',   'key': 'streak7'},
-    {'emoji': '💧', 'label': 'Hydration Goal', 'key': 'hydrated'},
-    {'emoji': '📓', 'label': 'First Journal',  'key': 'journaled'},
-    {'emoji': '😊', 'label': 'Mood Tracker',   'key': 'moodLogged'},
-    {'emoji': '📅', 'label': 'Full Week Move', 'key': 'fullWeek'},
-    {'emoji': '🎯', 'label': 'Challenge Done', 'key': 'challengeDone'},
-  ];
-
-  Set<String> _earnedBadgeKeys(AppState state) {
-    final earned = <String>{};
-    if (state.streak >= 7) earned.add('streak7');
-    if (state.waterGoalMetToday) earned.add('hydrated');
-    if (state.todayJournalEntry != null) earned.add('journaled');
-    if (state.moodLoggedToday) earned.add('moodLogged');
-    if (state.daysMovedThisWeek == 7) earned.add('fullWeek');
-    if (state.activeChallengeCompleted) earned.add('challengeDone');
-    return earned;
-  }
-
   void _showSettingsSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (_) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('Settings', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-          const SizedBox(height: 16),
-          _SettingsTile(
-            icon: Icons.palette_outlined,
-            iconColor: Colors.deepPurple,
-            label: 'Appearance',
-            onTap: () {
-              Navigator.pop(context);
-              // Appearance settings — placeholder
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: const Text('Appearance settings coming soon'),
+      builder: (_) => StatefulBuilder(
+        builder: (ctx, setSheet) => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Settings', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade50, borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.grey.shade200)),
+              child: Row(children: [
+                Container(
+                  width: 36, height: 36,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF4826A).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10)),
+                  child: const Icon(Icons.dark_mode_outlined, color: Color(0xFFF4826A), size: 18)),
+                const SizedBox(width: 14),
+                const Expanded(child: Text('Dark Mode',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600))),
+                Switch(
+                  value: ThemeState.instance.isDark,
+                  activeColor: const Color(0xFFF4826A),
+                  onChanged: (_) { ThemeState.instance.toggle(); setSheet(() {}); },
+                ),
+              ]),
+            ),
+            const SizedBox(height: 10),
+            _SettingsTile(
+              icon: Icons.help_outline, iconColor: Colors.teal, label: 'Help',
+              onTap: () {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                    content: const Text('Help centre coming soon'),
                     behavior: SnackBarBehavior.floating,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))));
-            },
-          ),
-          const SizedBox(height: 10),
-          _SettingsTile(
-            icon: Icons.help_outline,
-            iconColor: Colors.teal,
-            label: 'Help',
-            onTap: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: const Text('Help centre coming soon'),
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))));
-            },
-          ),
-          const SizedBox(height: 8),
-        ]),
+              },
+            ),
+            const SizedBox(height: 8),
+          ]),
+        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
+    final user  = FirebaseAuth.instance.currentUser;
     final state = AppState.instance;
-    final level = levelFromPoints(state.points);
+    final level              = levelFromPoints(state.points);
     final currentLevelPoints = pointsForCurrentLevel(level);
-    final nextLevelPoints = pointsForNextLevel(level);
-    final progressInLevel = state.points - currentLevelPoints;
-    final pointsNeeded = nextLevelPoints - currentLevelPoints;
-    final levelProgress = (progressInLevel / pointsNeeded).clamp(0.0, 1.0);
-    final earned = _earnedBadgeKeys(state);
+    final nextLevelPoints    = pointsForNextLevel(level);
+    final progressInLevel    = state.points - currentLevelPoints;
+    final pointsNeeded       = nextLevelPoints - currentLevelPoints;
+    final levelProgress      = (progressInLevel / pointsNeeded).clamp(0.0, 1.0);
 
     final displayName = user?.displayName ?? user?.email ?? 'User';
-    final initial = displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U';
+    final initial     = displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U';
 
-    // Pillar progress
     final moveProgress = (state.daysMovedThisWeek / 7).clamp(0.0, 1.0);
-    // Meals: count days this week where at least one meal was logged (approx via weeklyMovementDays as proxy — use mealItems as daily logged count capped at 7)
-    final int mealsLoggedToday = () {
-      int c = 0;
-      for (final t in MealType.values) { if (state.mealItems[t]!.isNotEmpty) c++; }
-      if (state.snackItems.isNotEmpty) c++;
-      return c;
-    }();
-    // For weekly meals we show today's meal count out of 3 main meals + snacks (no week history stored yet)
-    final mealsProgress = (mealsLoggedToday / 4).clamp(0.0, 1.0);
-    // Mind: count days moved this week as proxy; for mind use logged items today shown as x/7
-    final int mindLoggedToday = () {
-      int c = 0;
-      if (state.moodLoggedToday) c++;
-      if (state.sleepLoggedToday) c++;
-      if (state.todayJournalEntry != null) c++;
-      return c;
-    }();
 
-    return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+    // Meals: count distinct days this week where any meal was logged (via mealHistory)
+    final weekKeys = state.currentWeekDays;
+    final int mealsWeekDays = state.mealHistory.keys
+        .where((d) => weekKeys.contains(d))
+        .length;
+    final mealsProgress = (mealsWeekDays / 7).clamp(0.0, 1.0);
+
+    // Mind: count distinct days this week where mood OR sleep was logged
+    final int mindWeekDays = weekKeys.where((d) =>
+        state.moodHistory.any((e) => e['date'] == d) ||
+        state.sleepHistory.any((e) => e['date'] == d)).length;
+    final mindProgress = (mindWeekDays / 7).clamp(0.0, 1.0);
+
+    final quests = AppState.presetChallenges;
+
+    return ListenableBuilder(
+      listenable: ThemeState.instance,
+      builder: (context, _) { return Scaffold(
       appBar: AppBar(
         title: const Text('Profile', style: TextStyle(fontWeight: FontWeight.w700)),
-        backgroundColor: Colors.deepPurple, foregroundColor: Colors.white, elevation: 0,
+        backgroundColor: const Color(0xFFF4826A), foregroundColor: Colors.white, elevation: 0,
         actions: [
           Container(
             margin: const EdgeInsets.only(right: 6, top: 6, bottom: 6),
             padding: const EdgeInsets.symmetric(horizontal: 14),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.white.withOpacity(0.3))),
+              color: Theme.of(context).cardColor.withOpacity(0.2), borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Theme.of(context).cardColor.withOpacity(0.3))),
             child: Row(children: [
               const Text('🔥', style: TextStyle(fontSize: 16)), const SizedBox(width: 5),
               Text('${state.streak}', style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: Colors.white)),
@@ -152,20 +192,10 @@ class ProfileScreen extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
         child: Column(children: [
 
-          // ── Hero header ───────────────────────────────
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF9D50BB), Color(0xFF6E48AA)],
-                begin: Alignment.topLeft, end: Alignment.bottomRight),
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [BoxShadow(color: Colors.deepPurple.withOpacity(0.3),
-                  blurRadius: 12, offset: const Offset(0, 6))],
-            ),
+          // ── Hero ─────────────────────────────────────
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
             child: Stack(alignment: Alignment.center, children: [
-              // Settings gear — top right of card
               Positioned(
                 top: 0, right: 0,
                 child: GestureDetector(
@@ -173,10 +203,9 @@ class ProfileScreen extends StatelessWidget {
                   child: Container(
                     width: 36, height: 36,
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(Icons.settings_outlined, color: Colors.white, size: 18),
+                      color: const Color(0xFFF4826A).withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(10)),
+                    child: const Icon(Icons.settings_outlined, color: Color(0xFFF4826A), size: 18),
                   ),
                 ),
               ),
@@ -185,25 +214,25 @@ class ProfileScreen extends StatelessWidget {
                   width: 72, height: 72,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.white.withOpacity(0.2),
-                    border: Border.all(color: Colors.white.withOpacity(0.4), width: 2.5)),
+                    color: const Color(0xFFF4826A).withOpacity(0.15),
+                    border: Border.all(color: const Color(0xFFF4826A).withOpacity(0.35), width: 2.5)),
                   child: Center(child: Text(initial,
-                      style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w700, color: Colors.white))),
+                      style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w700, color: Color(0xFFF4826A)))),
                 ),
                 const SizedBox(height: 10),
                 Text(user?.displayName ?? 'Hey there!',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 2),
-                Text(user?.email ?? '',
-                    style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.6))),
+                Text(user?.email ?? '', style: TextStyle(fontSize: 11, color: Colors.grey.shade400)),
                 const SizedBox(height: 12),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                   decoration: BoxDecoration(
-                    color: Colors.amber.withOpacity(0.2), borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.amber.withOpacity(0.4))),
+                    color: Colors.amber.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.amber.withOpacity(0.35))),
                   child: Text('Level $level — ${levelTitle(level)}',
-                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.amber)),
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Color(0xFFB8960A))),
                 ),
               ]),
             ]),
@@ -215,9 +244,11 @@ class ProfileScreen extends StatelessWidget {
           Row(children: [
             Expanded(child: _StatCard(icon: '🔥', value: '${state.streak}', label: 'Streak')),
             const SizedBox(width: 10),
-            Expanded(child: _StatCard(icon: '⭐', value: '${state.points}', label: 'Points')),
+            Expanded(child: _StatCard(icon: '⭐', value: '${state.points}', label: 'Total Points')),
             const SizedBox(width: 10),
-            Expanded(child: _StatCard(icon: '🏅', value: '${earned.length}', label: 'Badges')),
+            Expanded(child: _StatCard(icon: '🏅',
+                value: '${quests.where((q) => state.activeChallengeId == q['id'] && state.activeChallengeCompleted).length}',
+                label: 'Badges')),
           ]),
 
           const SizedBox(height: 12),
@@ -226,7 +257,7 @@ class ProfileScreen extends StatelessWidget {
           _Card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
               Text('Level $level', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-              Text('${state.points} / $nextLevelPoints XP',
+              Text('$progressInLevel / $xpPerLevel XP',
                   style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
             ]),
             const SizedBox(height: 10),
@@ -234,7 +265,7 @@ class ProfileScreen extends StatelessWidget {
               borderRadius: BorderRadius.circular(8),
               child: LinearProgressIndicator(
                 value: levelProgress,
-                backgroundColor: Colors.deepPurple.shade100,
+                backgroundColor: const Color(0xFFFFD6CE),
                 valueColor: const AlwaysStoppedAnimation(Color(0xFF9D50BB)),
                 minHeight: 10,
               ),
@@ -246,77 +277,104 @@ class ProfileScreen extends StatelessWidget {
 
           const SizedBox(height: 12),
 
-          // ── Today's pillars — square boxes ────────────
+          // ── Pillar progress ───────────────────────────
           _Card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('THIS WEEK', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700,
                 letterSpacing: 1.2, color: Colors.grey)),
             const SizedBox(height: 14),
             Row(children: [
               Expanded(child: _PillarBox(
-                emoji: '🏃', label: 'Move',
-                color: Colors.deepPurple,
-                lightColor: Colors.deepPurple.shade50,
-                progress: moveProgress,
+                emoji: '🏃', label: 'Move', color: const Color(0xFFF4826A),
+                lightColor: const Color(0xFFFFF0ED), progress: moveProgress,
                 detail: '${state.daysMovedThisWeek}/7 days',
               )),
               const SizedBox(width: 10),
               Expanded(child: _PillarBox(
-                emoji: '🍽️', label: 'Meals',
-                color: const Color(0xFFF7971E),
-                lightColor: const Color(0xFFFFF3E0),
-                progress: mealsProgress,
-                detail: '$mealsLoggedToday/7 days',
+                emoji: '🍽️', label: 'Meals', color: const Color(0xFFF7971E),
+                lightColor: const Color(0xFFFFF3E0), progress: mealsProgress,
+                detail: '$mealsWeekDays/7 days',
               )),
               const SizedBox(width: 10),
               Expanded(child: _PillarBox(
-                emoji: '🧘', label: 'Mind',
-                color: const Color(0xFF5A9E72),
-                lightColor: const Color(0xFFE8F5E9),
-                progress: mindLoggedToday / 7,
-                detail: '$mindLoggedToday/7 days',
+                emoji: '🧘', label: 'Mind', color: const Color(0xFF5A9E72),
+                lightColor: const Color(0xFFE8F5E9), progress: mindProgress,
+                detail: '$mindWeekDays/7 days',
               )),
             ]),
           ])),
 
           const SizedBox(height: 12),
 
-          // ── 6 Badges ──────────────────────────────────
+          // ── Weekly Insight ────────────────────────────
+          _InsightCard(
+            hasEnoughData: state.hasEnoughDataForInsight,
+            insight: state.cachedInsight,
+            onRefresh: _maybeRefreshInsight,
+          ),
+
+          const SizedBox(height: 12),
+
+          // ── Badges ────────────────────────────────────
           _Card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
               const Text('BADGES', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700,
                   letterSpacing: 1.2, color: Colors.grey)),
-              Text('${earned.length} badges',
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.deepPurple.shade400)),
+              Text(
+                '${quests.where((q) => state.activeChallengeId == q['id'] && state.activeChallengeCompleted).length} / ${quests.length} earned',
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
+                    color: const Color(0xFFF4826A).withOpacity(0.7))),
             ]),
             const SizedBox(height: 14),
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: allBadges.map((badge) {
-                final isEarned = earned.contains(badge['key']);
-                return Column(mainAxisSize: MainAxisSize.min, children: [
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 300),
-                    width: 50, height: 50,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: quests.asMap().entries.map((entry) {
+                final i     = entry.key;
+                final quest = entry.value;
+                final isActive    = state.activeChallengeId == quest['id'];
+                final isCompleted = isActive && state.activeChallengeCompleted;
+                final isLocked    = !isActive && !isCompleted;
+                return Expanded(child: Padding(
+                  padding: EdgeInsets.only(left: i == 0 ? 0 : 6, right: i == 2 ? 0 : 6),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: isEarned ? Colors.amber.shade100 : Colors.grey.shade100,
+                      color: isCompleted ? const Color(0xFFFFFBE6)
+                          : isLocked ? Colors.grey.shade50 : const Color(0xFFFFF0ED),
+                      borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: isEarned ? Colors.amber.shade300 : Colors.grey.shade300, width: 2),
-                      boxShadow: isEarned ? [BoxShadow(color: Colors.amber.withOpacity(0.3),
-                          blurRadius: 8, spreadRadius: 1)] : null,
+                        color: isCompleted ? const Color(0xFFFFCC00)
+                            : isLocked ? Colors.grey.shade200
+                            : const Color(0xFFF4826A).withOpacity(0.4),
+                        width: isCompleted ? 1.5 : 1),
+                      boxShadow: isCompleted ? [BoxShadow(
+                          color: Colors.amber.withOpacity(0.2),
+                          blurRadius: 8, offset: const Offset(0, 2))] : null,
                     ),
-                    child: Center(child: Text(isEarned ? badge['emoji'] as String : '🔒',
-                        style: TextStyle(fontSize: isEarned ? 22 : 16))),
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(isCompleted ? '🏅' : isLocked ? '🔒' : '🏆',
+                          style: const TextStyle(fontSize: 26)),
+                      const SizedBox(height: 8),
+                      Text(quest['title'] as String,
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700,
+                              color: isLocked ? Colors.grey.shade400 : Colors.grey.shade800),
+                          maxLines: 3, overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: isCompleted ? const Color(0xFFFFCC00)
+                              : isLocked ? Colors.grey.shade200 : const Color(0xFFFFD6CE),
+                          borderRadius: BorderRadius.circular(6)),
+                        child: Text(
+                          isCompleted ? 'Earned' : isLocked ? 'Locked' : 'Active',
+                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700,
+                              color: isCompleted ? Colors.white
+                                  : isLocked ? Colors.grey.shade400
+                                  : const Color(0xFFB85A47))),
+                      ),
+                    ]),
                   ),
-                  const SizedBox(height: 5),
-                  SizedBox(
-                    width: 48,
-                    child: Text(badge['label'] as String,
-                        style: TextStyle(fontSize: 8, fontWeight: FontWeight.w600,
-                            color: isEarned ? Colors.grey.shade700 : Colors.grey.shade400),
-                        textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis),
-                  ),
-                ]);
+                ));
               }).toList(),
             ),
           ])),
@@ -326,7 +384,7 @@ class ProfileScreen extends StatelessWidget {
           // ── Sign out ──────────────────────────────────
           Container(
             decoration: BoxDecoration(
-              color: Colors.white, borderRadius: BorderRadius.circular(20),
+              color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(20),
               border: Border.all(color: Colors.grey.shade200),
               boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04),
                   blurRadius: 10, offset: const Offset(0, 2))],
@@ -341,6 +399,7 @@ class ProfileScreen extends StatelessWidget {
                   fontWeight: FontWeight.w600, color: Colors.redAccent)),
               trailing: const Icon(Icons.chevron_right, color: Colors.grey),
               onTap: () async {
+                await AppState.resetForSignOut();
                 await FirebaseAuth.instance.signOut();
                 Navigator.pushAndRemoveUntil(context,
                     MaterialPageRoute(builder: (_) => const WelcomeScreen()), (_) => false);
@@ -349,99 +408,135 @@ class ProfileScreen extends StatelessWidget {
           ),
         ]),
       ),
+    ); },
     );
   }
 }
 
-// ── Pillar square box ─────────────────────────────────────
-class _PillarBox extends StatelessWidget {
-  final String emoji;
-  final String label;
-  final Color color;
-  final Color lightColor;
-  final double progress;
-  final String detail;
-
-  const _PillarBox({required this.emoji, required this.label, required this.color,
-      required this.lightColor, required this.progress, required this.detail});
+// ── Weekly Insight Card ───────────────────────────────────
+class _InsightCard extends StatelessWidget {
+  final bool hasEnoughData;
+  final String? insight;
+  final VoidCallback onRefresh;
+  const _InsightCard({required this.hasEnoughData,
+      required this.insight, required this.onRefresh});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: lightColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: color.withOpacity(0.15)),
+        gradient: const LinearGradient(
+          colors: [Color(0xFFFFF0ED), Color(0xFFFCE4EC)],
+          begin: Alignment.topLeft, end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFF4826A).withOpacity(0.25)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04),
+            blurRadius: 10, offset: const Offset(0, 2))],
       ),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(emoji, style: const TextStyle(fontSize: 20)),
-        const SizedBox(height: 6),
-        Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color)),
-        const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: LinearProgressIndicator(
-            value: progress, minHeight: 5,
-            backgroundColor: color.withOpacity(0.15),
-            valueColor: AlwaysStoppedAnimation(color),
-          ),
-        ),
-        const SizedBox(height: 5),
-        Text(detail, style: TextStyle(fontSize: 9, color: color.withOpacity(0.8), fontWeight: FontWeight.w500)),
+        Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Row(children: [
+            const Text('🔮', style: TextStyle(fontSize: 16)),
+            const SizedBox(width: 8),
+            const Text('WEEKLY INSIGHT', style: TextStyle(fontSize: 10,
+                fontWeight: FontWeight.w700, letterSpacing: 1.2, color: Colors.grey)),
+          ]),
+          if (hasEnoughData)
+            GestureDetector(
+              onTap: onRefresh,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF4826A).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10)),
+                child: const Text('Refresh', style: TextStyle(fontSize: 10,
+                    fontWeight: FontWeight.w700, color: Color(0xFFB85A47))),
+              ),
+            ),
+        ]),
+        const SizedBox(height: 12),
+        if (!hasEnoughData || insight == null || insight!.isEmpty)
+          Text('Keep logging for 7 days to unlock your personalised weekly insight! 🌸',
+              style: TextStyle(fontSize: 13, height: 1.6, color: Colors.grey.shade600))
+        else
+          Text(insight!, style: const TextStyle(fontSize: 13, height: 1.6, color: Color(0xFF4A3728))),
       ]),
     );
   }
 }
 
-// ── Settings tile ─────────────────────────────────────────
+// ── Pillar Box ────────────────────────────────────────────
+class _PillarBox extends StatelessWidget {
+  final String emoji, label, detail;
+  final Color color, lightColor;
+  final double progress;
+  const _PillarBox({required this.emoji, required this.label, required this.color,
+      required this.lightColor, required this.progress, required this.detail});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: lightColor, borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: color.withOpacity(0.15))),
+    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(emoji, style: const TextStyle(fontSize: 20)),
+      const SizedBox(height: 6),
+      Text(label, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: color)),
+      const SizedBox(height: 8),
+      ClipRRect(borderRadius: BorderRadius.circular(4),
+        child: LinearProgressIndicator(value: progress, minHeight: 5,
+            backgroundColor: color.withOpacity(0.15),
+            valueColor: AlwaysStoppedAnimation(color))),
+      const SizedBox(height: 5),
+      Text(detail, style: TextStyle(fontSize: 9, color: color.withOpacity(0.8), fontWeight: FontWeight.w500)),
+    ]),
+  );
+}
+
+// ── Settings Tile ─────────────────────────────────────────
 class _SettingsTile extends StatelessWidget {
   final IconData icon;
   final Color iconColor;
   final String label;
   final VoidCallback onTap;
-
   const _SettingsTile({required this.icon, required this.iconColor,
       required this.label, required this.onTap});
 
   @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: Colors.grey.shade50, borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.grey.shade200)),
-        child: Row(children: [
-          Container(
-            width: 36, height: 36,
-            decoration: BoxDecoration(
-              color: iconColor.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
-            child: Icon(icon, color: iconColor, size: 18),
-          ),
-          const SizedBox(width: 14),
-          Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-          const Spacer(),
-          Icon(Icons.chevron_right, color: Colors.grey.shade400, size: 18),
-        ]),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => GestureDetector(
+    onTap: onTap,
+    child: Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFAF7F5), borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.grey.shade200)),
+      child: Row(children: [
+        Container(width: 36, height: 36,
+          decoration: BoxDecoration(
+            color: iconColor.withOpacity(0.1), borderRadius: BorderRadius.circular(10)),
+          child: Icon(icon, color: iconColor, size: 18)),
+        const SizedBox(width: 14),
+        Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+        const Spacer(),
+        Icon(Icons.chevron_right, color: Colors.grey.shade400, size: 18),
+      ]),
+    ),
+  );
 }
 
-// ── Shared ────────────────────────────────────────────────
 class _StatCard extends StatelessWidget {
-  final String icon;
-  final String value;
-  final String label;
+  final String icon, value, label;
   const _StatCard({required this.icon, required this.value, required this.label});
 
   @override
   Widget build(BuildContext context) => Container(
     padding: const EdgeInsets.symmetric(vertical: 14),
     decoration: BoxDecoration(
-      color: Colors.white, borderRadius: BorderRadius.circular(16),
+      color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(16),
       border: Border.all(color: Colors.grey.shade200),
       boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 2))],
     ),
@@ -463,7 +558,7 @@ class _Card extends StatelessWidget {
   Widget build(BuildContext context) => Container(
     width: double.infinity, padding: const EdgeInsets.all(16),
     decoration: BoxDecoration(
-      color: Colors.white, borderRadius: BorderRadius.circular(20),
+      color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(20),
       border: Border.all(color: Colors.grey.shade200),
       boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 2))],
     ),
