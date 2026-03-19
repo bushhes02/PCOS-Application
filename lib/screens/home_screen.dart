@@ -19,7 +19,7 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() => state.checkMissedChallengeDays());
       final frozeUsed = state.checkStreakOnOpen();
       if (frozeUsed) {
-        XpPopup.show(context, '🧊 Freeze used — streak saved!',
+        XpPopup.show(context, '🧊 Freeze used!', 
             color: const Color(0xFF5B9BD5));
       }
     });
@@ -35,6 +35,9 @@ class _HomeScreenState extends State<HomeScreen> {
   void _showMovementDialog() {
     String selectedType = 'Walk';
     int selectedDuration = 30;
+    String customType = '';
+    bool useCustom = false;
+    final customCtrl = TextEditingController();
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -58,40 +61,61 @@ class _HomeScreenState extends State<HomeScreen> {
               {'label': 'Workout', 'emoji': '🏋️'},
               {'label': 'Cycle',   'emoji': '🚴'},
               {'label': 'Run',     'emoji': '🏃'},
+              {'label': 'Other',   'emoji': ''},
             ].map((type) {
-              final isSel = selectedType == type['label'];
+              final isSel = useCustom ? type['label'] == 'Other' : selectedType == type['label'];
               return GestureDetector(
-                onTap: () => setSheet(() => selectedType = type['label']!),
+                onTap: () => setSheet(() {
+                  if (type['label'] == 'Other') {
+                    useCustom = true;
+                    selectedType = 'Other';
+                  } else {
+                    useCustom = false;
+                    selectedType = type['label']!;
+                  }
+                }),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
                     color: isSel ? const Color(0xFFF4826A) : const Color(0xFFFFF0ED),
                     borderRadius: BorderRadius.circular(12)),
-                  child: Text('${type['emoji']} ${type['label']}',
+                  child: Text(type['emoji']!.isEmpty ? type['label']! : '${type['emoji']} ${type['label']}',
                       style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
                           color: isSel ? Colors.white : const Color(0xFF9E4A3A))),
                 ),
               );
             }).toList()),
+            if (useCustom) ...[
+              const SizedBox(height: 12),
+              TextField(
+                controller: customCtrl,
+                textCapitalization: TextCapitalization.sentences,
+                onChanged: (v) => customType = v,
+                decoration: InputDecoration(
+                  hintText: 'e.g. Swimming, Dancing...',
+                  hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+                  filled: true, fillColor: Colors.grey.shade100,
+                  border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12)),
+              ),
+            ],
             const SizedBox(height: 20),
             const Text('Duration',
                 style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.grey)),
-            const SizedBox(height: 10),
-            Wrap(spacing: 8, children: [15, 20, 30, 45, 60].map((mins) {
-              final isSel = selectedDuration == mins;
-              return GestureDetector(
-                onTap: () => setSheet(() => selectedDuration = mins),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: isSel ? const Color(0xFFF4826A) : const Color(0xFFFFF0ED),
-                    borderRadius: BorderRadius.circular(12)),
-                  child: Text('${mins}m',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600,
-                          color: isSel ? Colors.white : const Color(0xFF9E4A3A))),
-                ),
-              );
-            }).toList()),
+            const SizedBox(height: 8),
+            Center(
+              child: Text('$selectedDuration min',
+                  style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w800,
+                      color: Color(0xFFB85A47))),
+            ),
+            Slider(
+              value: selectedDuration.toDouble(),
+              min: 5, max: 120, divisions: 23,
+              activeColor: const Color(0xFFF4826A),
+              label: '$selectedDuration min',
+              onChanged: (v) => setSheet(() => selectedDuration = v.round()),
+            ),
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
@@ -101,12 +125,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
                 onPressed: () {
-                  final wasFirst = !state.hasLoggedMovementToday;
-                  setState(() => state.logMovement(type: selectedType, duration: selectedDuration));
+                  final finalType = useCustom
+                      ? (customType.trim().isNotEmpty ? customType.trim() : 'Other')
+                      : selectedType;
+                  setState(() => state.logMovement(type: finalType, duration: selectedDuration));
                   Navigator.pop(context);
-                  if (wasFirst) {
-                    XpPopup.show(context, state.daysMovedThisWeek == 7 ? '+8 XP ⭐ Perfect week!' : '+3 XP ⭐');
-                  }
+                  XpPopup.show(context, state.daysMovedThisWeek == 7 ? '+8 XP ⭐' : '+3 XP ⭐');
                 },
                 child: const Text('Save', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
               ),
@@ -225,17 +249,21 @@ class _HomeScreenState extends State<HomeScreen> {
               textAlign: TextAlign.center),
           if (movements.isNotEmpty) ...[
             const SizedBox(height: 8),
-            ...movements.asMap().entries.map((entry) => Padding(
+            ...movements.asMap().entries.map((e) => Padding(
               padding: const EdgeInsets.only(bottom: 4),
-              child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                Text('${entry.value.type} · ${entry.value.duration} min',
-                    style: TextStyle(fontSize: 10, color: Colors.grey.shade500)),
-                const SizedBox(width: 6),
-                GestureDetector(
-                  onTap: () => setState(() => state.removeMovement(entry.key)),
-                  child: Icon(Icons.close, size: 13, color: Colors.grey.shade400),
-                ),
-              ]),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('${e.value.type} · ${e.value.duration} min',
+                      style: TextStyle(fontSize: 10, color: Colors.grey.shade500)),
+                  const SizedBox(width: 4),
+                  GestureDetector(
+                    onTap: () => setState(() => state.removeMovement(e.key)),
+                    child: Icon(Icons.close, size: 12, color: Colors.grey.shade400),
+                  ),
+                ],
+              ),
             )),
           ],
           const SizedBox(height: 10),
@@ -451,7 +479,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 onTap: isDisabled ? null : () {
                   if (!isActive) {
                     setState(() => state.startChallenge(quest['id'] as String));
-                    XpPopup.show(context, '🎯 Quest started!');
+                    // no popup on quest start
                   } else {
                     _openChallengeDetail();
                   }
@@ -533,36 +561,83 @@ class _ChallengeDetailScreenState extends State<_ChallengeDetailScreen> {
     setState(() => state.checkInChallenge());
     widget.onChanged();
     if (state.activeChallengeCompleted) {
-      XpPopup.show(context, '+\${challenge[\'xp\']} XP ⭐ Quest done!', color: const Color(0xFFFFCC00));
-    } else {
-      XpPopup.show(context, '✅ Checked in!');
+      XpPopup.show(context, '+${challenge['xp']} XP ⭐', color: const Color(0xFFFFCC00));
     }
   }
 
   void _uncheckIn() {
     setState(() => state.uncheckInChallenge());
     widget.onChanged();
-    XpPopup.show(context, '↩ Removed', color: Colors.grey);
+    // no popup on undo
   }
 
   void _confirmAbandon() {
-    showDialog(context: context, builder: (_) => AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: const Text('Abandon quest?'),
-      content: const Text('Your progress will be lost. You can start a new quest anytime.'),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-        TextButton(
-          onPressed: () {
-            setState(() => state.clearChallenge());
-            widget.onChanged();
-            Navigator.pop(context);
-            Navigator.pop(context);
-          },
-          child: Text('Abandon', style: TextStyle(color: Colors.red.shade400)),
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => Container(
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(28),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.08),
+              blurRadius: 24, offset: const Offset(0, -4))],
         ),
-      ],
-    ));
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(width: 40, height: 4,
+              decoration: BoxDecoration(color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2))),
+          const SizedBox(height: 20),
+          Container(
+            width: 56, height: 56,
+            decoration: BoxDecoration(
+              color: Colors.red.shade50, borderRadius: BorderRadius.circular(16)),
+            child: const Center(child: Text('🚩', style: TextStyle(fontSize: 26))),
+          ),
+          const SizedBox(height: 16),
+          const Text('Abandon quest?',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF1E1610))),
+          const SizedBox(height: 8),
+          Text('Your progress will be lost. You can start a new quest anytime.',
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade500, height: 1.5),
+              textAlign: TextAlign.center),
+          const SizedBox(height: 24),
+          Row(children: [
+            Expanded(child: GestureDetector(
+              onTap: () => Navigator.pop(context),
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(14)),
+                child: const Center(child: Text('Cancel',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700,
+                        color: Color(0xFF1E1610)))),
+              ),
+            )),
+            const SizedBox(width: 12),
+            Expanded(child: GestureDetector(
+              onTap: () {
+                setState(() => state.clearChallenge());
+                widget.onChanged();
+                Navigator.pop(context);
+                Navigator.pop(context);
+              },
+              child: Container(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  color: Colors.red.shade400,
+                  borderRadius: BorderRadius.circular(14)),
+                child: const Center(child: Text('Abandon',
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700,
+                        color: Colors.white))),
+              ),
+            )),
+          ]),
+        ]),
+      ),
+    );
   }
 
   @override
@@ -650,29 +725,22 @@ class _ChallengeDetailScreenState extends State<_ChallengeDetailScreen> {
               children: List.generate(target, (i) {
                 final isChecked = i < progress;
                 final isMissed  = i < state.challengeMissedDays.length && !isChecked;
-                // Only the most-recently-checked day (progress-1) is tappable to undo
-                final isUndoable = isChecked && i == progress - 1 && state.checkedInToday;
-                return GestureDetector(
-                  onTap: isUndoable ? _uncheckIn : null,
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 200),
-                    width: 36, height: 36,
-                    decoration: BoxDecoration(
+                return AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  width: 36, height: 36,
+                  decoration: BoxDecoration(
+                    color: isChecked ? const Color(0xFFF4826A)
+                        : isMissed ? Colors.red.shade100 : Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
                       color: isChecked ? const Color(0xFFF4826A)
-                          : isMissed ? Colors.red.shade100 : Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: isChecked ? const Color(0xFFF4826A)
-                            : isMissed ? Colors.red.shade300 : Colors.grey.shade300,
-                        width: isUndoable ? 2 : 1),
-                    ),
-                    child: Center(child: isUndoable
-                        ? Text('↩', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14))
-                        : isChecked
-                            ? Text('✓', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14))
-                            : Text('${i + 1}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
-                                color: isMissed ? Colors.red.shade400 : Colors.grey.shade400))),
+                          : isMissed ? Colors.red.shade300 : Colors.grey.shade300,
+                      width: 1),
                   ),
+                  child: Center(child: isChecked
+                      ? const Text('✓', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14))
+                      : Text('${i + 1}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
+                          color: isMissed ? Colors.red.shade400 : Colors.grey.shade400))),
                 );
               }),
             ),
@@ -726,13 +794,13 @@ class _ChallengeDetailScreenState extends State<_ChallengeDetailScreen> {
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: state.checkedInToday ? Colors.grey.shade200 : const Color(0xFFF4826A),
-                    foregroundColor: state.checkedInToday ? Colors.grey : Colors.white,
+                    foregroundColor: state.checkedInToday ? Colors.grey.shade600 : Colors.white,
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))),
-                  onPressed: state.checkedInToday ? null : _checkIn,
+                  onPressed: state.checkedInToday ? _uncheckIn : _checkIn,
                   child: Text(
-                    state.checkedInToday ? '✓ Checked in today — tap ↩ to undo' : '✅ Mark today as done',
+                    state.checkedInToday ? 'Undo' : 'Mark today as done!',
                     style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
                 ),
               ),

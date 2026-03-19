@@ -34,10 +34,9 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
-  firebase_core: ^2.30.0
-  firebase_auth: ^4.17.0
-  hive: ^2.2.3
-  hive_flutter: ^1.1.0
+  firebase_core: ^3.6.0
+  firebase_auth: ^5.3.0
+  cloud_firestore: ^5.4.0
   http: ^1.1.0
 
 dev_dependencies:
@@ -50,8 +49,6 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^5.0.0
-  hive_generator: ^2.0.1
-  build_runner: ^2.4.6
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
@@ -64,7 +61,13 @@ flutter:
   # the material Icons class.
   uses-material-design: true
   assets: 
-    - assets/images/
+    - assets/images/logo.png
+    - assets/images/avatar_1.png
+    - assets/images/avatar_2.png
+    - assets/images/avatar_3.png
+    - assets/images/avatar_4.png
+    - assets/images/avatar_5.png
+    - assets/images/avatar_6.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

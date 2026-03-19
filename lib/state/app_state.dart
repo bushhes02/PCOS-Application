@@ -1,4 +1,4 @@
-import 'package:hive_flutter/hive_flutter.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 enum MealType { breakfast, lunch, dinner }
@@ -28,11 +28,25 @@ class JournalEntry {
 class FoodItem {
   final String name;
   final String portion;
-  FoodItem({required this.name, required this.portion});
+  final bool   fromDatabase; // true = selected from USDA lookup, false = manually typed
 
-  Map<String, dynamic> toMap() => {'name': name, 'portion': portion};
-  static FoodItem fromMap(Map map) =>
-      FoodItem(name: map['name'] as String, portion: map['portion'] as String);
+  FoodItem({
+    required this.name,
+    required this.portion,
+    this.fromDatabase = false,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'name': name,
+    'portion': portion,
+    'fromDatabase': fromDatabase,
+  };
+
+  static FoodItem fromMap(Map map) => FoodItem(
+    name:         map['name']         as String,
+    portion:      map['portion']      as String,
+    fromDatabase: (map['fromDatabase'] ?? false) as bool,
+  );
 }
 
 class AppState {
@@ -47,91 +61,169 @@ class AppState {
   static Future<void> initForUser() async {
     final uid = FirebaseAuth.instance.currentUser?.uid;
     assert(uid != null, 'No Firebase user when initForUser() was called');
-    final boxName = 'user_$uid';
-    if (!Hive.isBoxOpen(boxName)) {
-      await Hive.openBox(boxName);
-    }
-    _instance = AppState._load(Hive.box(boxName));
+    final doc = FirebaseFirestore.instance
+        .collection('users')
+        .doc(uid)
+        .collection('data')
+        .doc('state');
+    final snap = await doc.get();
+    _instance = AppState._load(doc, snap.data() ?? {});
   }
 
   static Future<void> resetForSignOut() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid != null) {
-      final boxName = 'user_$uid';
-      if (Hive.isBoxOpen(boxName)) {
-        await Hive.box(boxName).close();
-      }
-    }
     _instance = null;
   }
 
-  // ── Private constructor ────────────────────────────────
-  late final Box _box;
+  // ── Private fields ─────────────────────────────────────
+  late final DocumentReference _doc;
 
-  AppState._load(Box box) {
-    _box = box;
+  AppState._load(DocumentReference doc, Map<String, dynamic> data) {
+    _doc = doc;
 
-    points        = _box.get('points',        defaultValue: 0);
-    streak        = _box.get('streak',        defaultValue: 0);
-    hasLoggedToday= _box.get('hasLoggedToday',defaultValue: false);
-    freezeTokens  = _box.get('freezeTokens',  defaultValue: 0);
-    lastStreakDate = _box.get('lastStreakDate', defaultValue: null);
-    waterGlasses  = _box.get('waterGlasses',  defaultValue: 0);
-    waterGoalMetToday = _box.get('waterGoalMetToday', defaultValue: false);
-    waterXpToday  = _box.get('waterXpToday',  defaultValue: 0);
+    points            = (data['points']            ?? 0) as int;
+    streak            = (data['streak']            ?? 0) as int;
+    hasLoggedToday    = (data['hasLoggedToday']    ?? false) as bool;
+    freezeTokens      = (data['freezeTokens']      ?? 0) as int;
+    lastStreakDate     = data['lastStreakDate']     as String?;
+    waterGlasses      = (data['waterGlasses']      ?? 0) as int;
+    waterGoalMetToday = (data['waterGoalMetToday'] ?? false) as bool;
+    waterXpToday      = (data['waterXpToday']      ?? 0) as int;
 
-    todayMood      = _box.get('todayMood',      defaultValue: null);
-    moodLoggedToday= _box.get('moodLoggedToday',defaultValue: false);
+    todayMood        = data['todayMood']        as String?;
+    moodLoggedToday  = (data['moodLoggedToday']  ?? false) as bool;
+    sleepHours       = (data['sleepHours']  as num?)?.toDouble();
+    sleepLoggedToday = (data['sleepLoggedToday'] ?? false) as bool;
 
-    sleepHours     = _box.get('sleepHours',     defaultValue: null);
-    sleepLoggedToday = _box.get('sleepLoggedToday', defaultValue: false);
-
-    final rawEntries = _box.get('journalEntries', defaultValue: []);
-    journalEntries = (rawEntries as List)
-        .map((e) => JournalEntry.fromMap(Map.from(e)))
+    final rawEntries = data['journalEntries'] as List? ?? [];
+    journalEntries = rawEntries
+        .map((e) => JournalEntry.fromMap(Map.from(e as Map)))
         .toList();
 
-    final rawWeekly = _box.get('weeklyMovementDays', defaultValue: []);
+    final rawWeekly = data['weeklyMovementDays'] as List? ?? [];
     weeklyMovementDays = List<String>.from(rawWeekly);
-    weeklyBonusAwarded = _box.get('weeklyBonusAwarded', defaultValue: false);
+    weeklyBonusAwarded = (data['weeklyBonusAwarded'] ?? false) as bool;
 
-    activeChallengeId       = _box.get('activeChallengeId',       defaultValue: null);
-    activeChallengeProgress = _box.get('activeChallengeProgress', defaultValue: 0);
-    activeChallengeCompleted= _box.get('activeChallengeCompleted',defaultValue: false);
-    challengeStartDate      = _box.get('challengeStartDate',      defaultValue: null);
-    challengeCheckedDays    = Set<String>.from(_box.get('challengeCheckedDays', defaultValue: []));
-    challengeMissedDays     = List<String>.from(_box.get('challengeMissedDays', defaultValue: []));
-    challengeTotalMissed    = _box.get('challengeTotalMissed',    defaultValue: 0);
+    activeChallengeId        = data['activeChallengeId']        as String?;
+    activeChallengeProgress  = (data['activeChallengeProgress']  ?? 0) as int;
+    activeChallengeCompleted = (data['activeChallengeCompleted'] ?? false) as bool;
+    challengeStartDate       = data['challengeStartDate']       as String?;
+    challengeCheckedDays = Set<String>.from(
+        (data['challengeCheckedDays'] as List? ?? []));
+    challengeMissedDays = List<String>.from(
+        (data['challengeMissedDays'] as List? ?? []));
+    challengeTotalMissed = (data['challengeTotalMissed'] ?? 0) as int;
 
-    // ── Historical logs (new) ──────────────────────────
-    final rawMoodHistory = _box.get('moodHistory', defaultValue: []);
-    moodHistory = List<Map<String, dynamic>>.from(
-        (rawMoodHistory as List).map((e) => Map<String, dynamic>.from(e)));
+    final rawMoodHistory = data['moodHistory'] as List? ?? [];
+    moodHistory = rawMoodHistory
+        .map((e) => Map<String, dynamic>.from(e as Map)).toList();
 
-    final rawMovementHistory = _box.get('movementHistory', defaultValue: []);
-    movementHistory = List<Map<String, dynamic>>.from(
-        (rawMovementHistory as List).map((e) => Map<String, dynamic>.from(e)));
+    final rawMovementHistory = data['movementHistory'] as List? ?? [];
+    movementHistory = rawMovementHistory
+        .map((e) => Map<String, dynamic>.from(e as Map)).toList();
 
-    final rawSleepHistory = _box.get('sleepHistory', defaultValue: []);
-    sleepHistory = List<Map<String, dynamic>>.from(
-        (rawSleepHistory as List).map((e) => Map<String, dynamic>.from(e)));
+    final rawSleepHistory = data['sleepHistory'] as List? ?? [];
+    sleepHistory = rawSleepHistory
+        .map((e) => Map<String, dynamic>.from(e as Map)).toList();
 
-    final rawWaterHistory = _box.get('waterHistory', defaultValue: []);
-    waterHistory = List<Map<String, dynamic>>.from(
-        (rawWaterHistory as List).map((e) => Map<String, dynamic>.from(e)));
+    final rawWaterHistory = data['waterHistory'] as List? ?? [];
+    waterHistory = rawWaterHistory
+        .map((e) => Map<String, dynamic>.from(e as Map)).toList();
 
-    final rawMealHistory = _box.get('mealHistory', defaultValue: {});
+    final rawMealHistory = data['mealHistory'] as Map? ?? {};
     mealHistory = Map<String, bool>.from(rawMealHistory);
 
-    // ── Insight cache (new) ────────────────────────────
-    cachedInsight        = _box.get('cachedInsight',        defaultValue: null);
-    cachedInsightDate    = _box.get('cachedInsightDate',    defaultValue: null);
+    final rawMealDayHistory = data['mealDayHistory'] as Map? ?? {};
+    mealDayHistory = rawMealDayHistory.map((date, meals) {
+      final mealsMap = Map<String, dynamic>.from(meals as Map);
+      return MapEntry(date as String, mealsMap.map((mealType, items) {
+        final itemList = (items as List).map((e) => FoodItem.fromMap(Map.from(e as Map))).toList();
+        return MapEntry(mealType as String, itemList);
+      }));
+    });
 
-    _loadMeals();
-    _loadSnacks();
-    _loadTodayMovements();
-    _resetIfNewDay();  // clears daily fields if date has changed
+    cachedInsight     = data['cachedInsight']     as String?;
+    cachedInsightDate = data['cachedInsightDate'] as String?;
+    selectedAvatar    = data['selectedAvatar']    as String?;
+
+    for (final type in MealType.values) {
+      final raw = data['meal_${type.name}'] as List? ?? [];
+      mealItems[type] = raw
+          .map((e) => FoodItem.fromMap(Map.from(e as Map))).toList();
+    }
+    final rawSnacks = data['snackItems'] as List? ?? [];
+    snackItems = rawSnacks
+        .map((e) => FoodItem.fromMap(Map.from(e as Map))).toList();
+
+    final rawTodayMov = data['todayMovements'] as List? ?? [];
+    todayMovements = rawTodayMov.map((e) {
+      final m = Map<String, dynamic>.from(e as Map);
+      return MovementLog(
+        type:     m['type']     as String,
+        duration: m['duration'] as int,
+        points:   m['points']   as int,
+      );
+    }).toList();
+
+    _resetIfNewDay(data['lastActiveDate'] as String?);
   }
+
+  // ── Save — fire and forget, UI stays instant ───────────
+  void _updateLeaderboard() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    FirebaseFirestore.instance.collection('leaderboard').doc(user.uid).set({
+      'name':      user.displayName ?? 'Warrior',
+      'points':    points,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  void _save() {
+    _doc.set(_toMap(), SetOptions(merge: true));
+    _updateLeaderboard();
+  }
+
+  Map<String, dynamic> _toMap() => {
+    'points':                  points,
+    'streak':                  streak,
+    'hasLoggedToday':          hasLoggedToday,
+    'freezeTokens':            freezeTokens,
+    'lastStreakDate':           lastStreakDate,
+    'waterGlasses':            waterGlasses,
+    'waterGoalMetToday':       waterGoalMetToday,
+    'waterXpToday':            waterXpToday,
+    'todayMood':               todayMood,
+    'moodLoggedToday':         moodLoggedToday,
+    'sleepHours':              sleepHours,
+    'sleepLoggedToday':        sleepLoggedToday,
+    'journalEntries':          journalEntries.map((e) => e.toMap()).toList(),
+    'weeklyMovementDays':      weeklyMovementDays,
+    'weeklyBonusAwarded':      weeklyBonusAwarded,
+    'activeChallengeId':       activeChallengeId,
+    'activeChallengeProgress': activeChallengeProgress,
+    'activeChallengeCompleted':activeChallengeCompleted,
+    'challengeStartDate':      challengeStartDate,
+    'challengeCheckedDays':    challengeCheckedDays.toList(),
+    'challengeMissedDays':     challengeMissedDays,
+    'challengeTotalMissed':    challengeTotalMissed,
+    'moodHistory':             moodHistory,
+    'movementHistory':         movementHistory,
+    'sleepHistory':            sleepHistory,
+    'waterHistory':            waterHistory,
+    'mealHistory':             mealHistory,
+    'mealDayHistory':          mealDayHistory.map((date, meals) =>
+        MapEntry(date, meals.map((type, items) =>
+            MapEntry(type, items.map((e) => e.toMap()).toList())))),
+    'cachedInsight':           cachedInsight,
+    'cachedInsightDate':       cachedInsightDate,
+    'selectedAvatar':          selectedAvatar,
+    'todayMovements':          todayMovements.map((m) => {
+      'type': m.type, 'duration': m.duration, 'points': m.points,
+    }).toList(),
+    for (final type in MealType.values)
+      'meal_${type.name}': mealItems[type]!.map((e) => e.toMap()).toList(),
+    'snackItems': snackItems.map((e) => e.toMap()).toList(),
+  };
 
   // ---------- CORE ----------
   int  points = 0;
@@ -141,7 +233,7 @@ class AppState {
   String? lastStreakDate;
 
   // ---------- MOVEMENT ----------
-  List<MovementLog> todayMovements   = [];
+  List<MovementLog> todayMovements    = [];
   List<String>      weeklyMovementDays = [];
   bool              weeklyBonusAwarded = false;
 
@@ -168,20 +260,14 @@ class AppState {
     final today = _todayKey();
     final alreadyLoggedToday = weeklyMovementDays.contains(today);
     todayMovements.add(MovementLog(type: type, duration: duration, points: 3));
-    _saveTodayMovements();
-
-    // Save to movement history
     movementHistory.removeWhere((e) => e['date'] == today);
     movementHistory.add({'date': today, 'type': type, 'duration_minutes': duration});
-    _saveMovementHistory();
-
     if (!alreadyLoggedToday) {
       weeklyMovementDays.add(today);
       points += 3;
       if (daysMovedThisWeek == 7 && !weeklyBonusAwarded) {
         points += 5;
         weeklyBonusAwarded = true;
-        _box.put('weeklyBonusAwarded', true);
       }
       if (!hasLoggedToday) {
         streak += 1;
@@ -190,13 +276,11 @@ class AppState {
         _checkFreezeReward();
       }
     }
-    _box.put('weeklyMovementDays', weeklyMovementDays);
-    _saveCore();
+    _save();
   }
 
   void removeMovement(int index) {
     todayMovements.removeAt(index);
-    _saveTodayMovements();
     if (todayMovements.isEmpty) {
       weeklyMovementDays.remove(_todayKey());
       points -= 3;
@@ -205,9 +289,8 @@ class AppState {
         hasLoggedToday = false;
         if (streak > 0) streak -= 1;
       }
-      _box.put('weeklyMovementDays', weeklyMovementDays);
     }
-    _saveCore();
+    _save();
   }
 
   // ---------- CHALLENGES ----------
@@ -266,13 +349,7 @@ class AppState {
     challengeCheckedDays     = {};
     challengeMissedDays      = [];
     challengeTotalMissed     = 0;
-    _box.put('activeChallengeId',        id);
-    _box.put('activeChallengeProgress',  0);
-    _box.put('activeChallengeCompleted', false);
-    _box.put('challengeStartDate',       challengeStartDate);
-    _box.put('challengeCheckedDays',     []);
-    _box.put('challengeMissedDays',      []);
-    _box.put('challengeTotalMissed',     0);
+    _save();
   }
 
   void checkInChallenge() {
@@ -281,15 +358,12 @@ class AppState {
     final challenge = activeChallenge;
     if (challenge == null) return;
     challengeCheckedDays.add(_todayKey());
-    _box.put('challengeCheckedDays', challengeCheckedDays.toList());
     activeChallengeProgress += 1;
-    _box.put('activeChallengeProgress', activeChallengeProgress);
     if (activeChallengeProgress >= (challenge['target'] as int)) {
       activeChallengeCompleted = true;
       points += challenge['xp'] as int;
-      _box.put('activeChallengeCompleted', true);
-      _saveCore();
     }
+    _save();
   }
 
   void checkMissedChallengeDays() {
@@ -317,9 +391,7 @@ class AppState {
     challengeTotalMissed++;
     points -= 2;
     if (points < 0) points = 0;
-    _box.put('challengeMissedDays',  challengeMissedDays);
-    _box.put('challengeTotalMissed', challengeTotalMissed);
-    _saveCore();
+    _save();
     if (shouldAbandonChallenge()) clearChallenge();
   }
 
@@ -327,9 +399,7 @@ class AppState {
     if (activeChallengeId == null || !checkedInToday) return;
     challengeCheckedDays.remove(_todayKey());
     activeChallengeProgress = (activeChallengeProgress - 1).clamp(0, 999);
-    _box.put('activeChallengeProgress',  activeChallengeProgress);
-    _box.put('challengeCheckedDays',     challengeCheckedDays.toList());
-    _saveCore();
+    _save();
   }
 
   bool shouldAbandonChallenge() {
@@ -354,13 +424,7 @@ class AppState {
     challengeCheckedDays     = {};
     challengeMissedDays      = [];
     challengeTotalMissed     = 0;
-    _box.delete('activeChallengeId');
-    _box.delete('activeChallengeProgress');
-    _box.delete('activeChallengeCompleted');
-    _box.delete('challengeStartDate');
-    _box.delete('challengeCheckedDays');
-    _box.delete('challengeMissedDays');
-    _box.delete('challengeTotalMissed');
+    _save();
   }
 
   // ---------- WATER ----------
@@ -380,8 +444,7 @@ class AppState {
       }
     }
     _saveWaterHistory();
-    _saveWater();
-    _saveCore();
+    _save();
   }
 
   void removeWaterGlass() {
@@ -398,8 +461,7 @@ class AppState {
       if (waterXpToday < 0) waterXpToday = 0;
     }
     _saveWaterHistory();
-    _saveWater();
-    _saveCore();
+    _save();
   }
 
   // ---------- MEALS ----------
@@ -413,11 +475,9 @@ class AppState {
   void addFoodItem(MealType meal, FoodItem item) {
     final wasEmpty = mealItems[meal]!.isEmpty;
     mealItems[meal]!.add(item);
-    if (wasEmpty) { points += 2; _box.put('points', points); }
-    // Mark this day as having a meal logged
+    if (wasEmpty) points += 2;
     mealHistory[_todayKey()] = true;
-    _box.put('mealHistory', mealHistory);
-    _saveMeals();
+    _save();
   }
 
   void removeFoodItem(MealType meal, int index) {
@@ -426,48 +486,25 @@ class AppState {
     if (wasOnlyItem) {
       points -= 2;
       if (points < 0) points = 0;
-      _box.put('points', points);
     }
-    _saveMeals();
+    _save();
   }
 
-  void addSnack(FoodItem item)    { snackItems.add(item);         _saveSnacks(); }
-  void removeSnack(int index)     { snackItems.removeAt(index);   _saveSnacks(); }
+  void addSnack(FoodItem item)  { snackItems.add(item);       _save(); }
+  void removeSnack(int index)   { snackItems.removeAt(index); _save(); }
 
   bool get hasMealsToday =>
       mealItems.values.any((list) => list.isNotEmpty) || snackItems.isNotEmpty;
-
-  void _loadMeals() {
-    for (final type in MealType.values) {
-      final raw = _box.get('meal_${type.name}', defaultValue: []);
-      mealItems[type] = (raw as List).map((e) => FoodItem.fromMap(Map.from(e))).toList();
-    }
-  }
-
-  void _saveMeals() {
-    for (final type in MealType.values) {
-      _box.put('meal_${type.name}', mealItems[type]!.map((e) => e.toMap()).toList());
-    }
-  }
-
-  void _loadSnacks() {
-    final raw = _box.get('snackItems', defaultValue: []);
-    snackItems = (raw as List).map((e) => FoodItem.fromMap(Map.from(e))).toList();
-  }
-
-  void _saveSnacks() {
-    _box.put('snackItems', snackItems.map((e) => e.toMap()).toList());
-  }
 
   // Legacy
   Map<MealType, Map<String, int>> mealsToday = {
     MealType.breakfast: {}, MealType.lunch: {}, MealType.dinner: {},
   };
   void saveMeal({required MealType mealType, required Map<String, int> macros}) {
-    mealsToday[mealType] = macros; _saveCore();
+    mealsToday[mealType] = macros; _save();
   }
   void resetMeal(MealType mealType) {
-    mealsToday[mealType]!.clear(); mealItems[mealType]!.clear(); _saveMeals();
+    mealsToday[mealType]!.clear(); mealItems[mealType]!.clear(); _save();
   }
 
   // ---------- MOOD ----------
@@ -490,15 +527,11 @@ class AppState {
       final wasLogged = moodLoggedToday;
       todayMood = mood; moodLoggedToday = true;
       if (!wasLogged) points += 3;
-      // Save to mood history
       final today = _todayKey();
       moodHistory.removeWhere((e) => e['date'] == today);
       moodHistory.add({'date': today, 'mood': mood});
-      _saveMoodHistory();
     }
-    _box.put('todayMood',       todayMood);
-    _box.put('moodLoggedToday', moodLoggedToday);
-    _saveCore();
+    _save();
   }
 
   // ---------- SLEEP ----------
@@ -508,31 +541,33 @@ class AppState {
   void logSleep(double hours) {
     final isFirstLog = !sleepLoggedToday;
     sleepHours = hours; sleepLoggedToday = true;
-    _box.put('sleepHours',      sleepHours);
-    _box.put('sleepLoggedToday', sleepLoggedToday);
-    // Save to sleep history
     final today = _todayKey();
     sleepHistory.removeWhere((e) => e['date'] == today);
     sleepHistory.add({'date': today, 'hours': hours});
-    _saveSleepHistory();
-    if (isFirstLog) { points += 3; _saveCore(); }
+    if (isFirstLog) points += 3;
+    _save();
+  }
+
+  void clearMood() {
+    if (!moodLoggedToday) return;
+    todayMood = null; moodLoggedToday = false;
+    points -= 3; if (points < 0) points = 0;
+    _save();
   }
 
   void clearSleep() {
     if (!sleepLoggedToday) return;
     sleepHours = null; sleepLoggedToday = false;
     points -= 3; if (points < 0) points = 0;
-    _box.put('sleepHours',       null);
-    _box.put('sleepLoggedToday', false);
-    _saveCore();
+    _save();
   }
 
   String get sleepQualityLabel {
     if (sleepHours == null) return 'Not logged';
-    if (sleepHours! < 5)  return 'Poor sleep 😴';
-    if (sleepHours! < 7)  return 'Could be better';
-    if (sleepHours! <= 9) return 'Good rest 🌟';
-    return 'Great sleep! ✨';
+    if (sleepHours! < 5)  return 'Sleep deprived';
+    if (sleepHours! < 7)  return 'Below recommended';
+    if (sleepHours! <= 9) return 'Optimal range';
+    return 'Oversleeping';
   }
 
   double get sleepProgress =>
@@ -568,23 +603,19 @@ class AppState {
         e.date.month == today.month &&
         e.date.day == today.day);
     journalEntries.add(JournalEntry(text: text, date: DateTime.now()));
-    _saveJournal();
-    if (!hadEntryToday) { points += 5; _saveCore(); }
+    if (!hadEntryToday) points += 5;
+    _save();
   }
 
   void deleteJournalEntry(JournalEntry entry) {
     journalEntries.remove(entry);
-    _saveJournal();
     final today = DateTime.now();
     if (entry.date.year == today.year &&
         entry.date.month == today.month &&
         entry.date.day == today.day) {
-      points -= 5; if (points < 0) points = 0; _saveCore();
+      points -= 5; if (points < 0) points = 0;
     }
-  }
-
-  void _saveJournal() {
-    _box.put('journalEntries', journalEntries.map((e) => e.toMap()).toList());
+    _save();
   }
 
   // ---------- AFFIRMATIONS ----------
@@ -630,15 +661,14 @@ class AppState {
   Set<String> achievements = {'First Movement'};
   void unlockAchievement(String achievement) => achievements.add(achievement);
 
-  // ---------- HISTORICAL LOGS (new) ----------
+  // ---------- HISTORICAL LOGS ----------
   List<Map<String, dynamic>> moodHistory     = [];
   List<Map<String, dynamic>> movementHistory = [];
   List<Map<String, dynamic>> sleepHistory    = [];
   List<Map<String, dynamic>> waterHistory    = [];
-  /// date string → true, marks days where any meal was logged
   Map<String, bool> mealHistory = {};
+  Map<String, Map<String, List<FoodItem>>> mealDayHistory = {}; // date -> mealType -> items
 
-  /// Returns entries from the last 7 days only
   List<Map<String, dynamic>> _last7Days(List<Map<String, dynamic>> history) {
     final cutoff = DateTime.now().subtract(const Duration(days: 7));
     return history.where((e) {
@@ -654,7 +684,6 @@ class AppState {
   List<Map<String, dynamic>> get last7DaysSleep    => _last7Days(sleepHistory);
   List<Map<String, dynamic>> get last7DaysWater    => _last7Days(waterHistory);
 
-  /// True if user has at least 7 days of any data logged
   bool get hasEnoughDataForInsight {
     final allDates = <String>{};
     for (final e in moodHistory)     allDates.add(e['date'] as String);
@@ -664,28 +693,15 @@ class AppState {
     return allDates.length >= 7;
   }
 
-  void _saveMoodHistory() {
-    _box.put('moodHistory', moodHistory);
-  }
-
-  void _saveMovementHistory() {
-    _box.put('movementHistory', movementHistory);
-  }
-
-  void _saveSleepHistory() {
-    _box.put('sleepHistory', sleepHistory);
-  }
-
   void _saveWaterHistory() {
     final today = _todayKey();
     waterHistory.removeWhere((e) => e['date'] == today);
     waterHistory.add({'date': today, 'glasses': waterGlasses});
-    _box.put('waterHistory', waterHistory);
   }
 
-  // ---------- INSIGHT CACHE (new) ----------
+  // ---------- INSIGHT CACHE ----------
   String? cachedInsight;
-  String? cachedInsightDate; // yyyy-MM-dd of when insight was last generated
+  String? cachedInsightDate;
 
   bool get shouldRefreshInsight {
     if (cachedInsight == null || cachedInsightDate == null) return true;
@@ -698,34 +714,33 @@ class AppState {
   void saveInsightCache(String insight) {
     cachedInsight     = insight;
     cachedInsightDate = _todayKey();
-    _box.put('cachedInsight',     cachedInsight);
-    _box.put('cachedInsightDate', cachedInsightDate);
+    _save();
   }
 
-  // ---------- SAVE HELPERS ----------
-  void _saveCore() {
-    _box.put('points',         points);
-    _box.put('streak',         streak);
-    _box.put('hasLoggedToday', hasLoggedToday);
-    _box.put('freezeTokens',   freezeTokens);
-    if (lastStreakDate != null) _box.put('lastStreakDate', lastStreakDate);
+  // ---------- AVATAR ----------
+  String? selectedAvatar;
+
+  void saveAvatar(String assetPath) {
+    selectedAvatar = assetPath;
+    _save();
   }
 
   // ---------- STREAK FREEZE ----------
   bool checkStreakOnOpen() {
-    final today     = _todayKey();
-    final yesterday = _dateKey(DateTime.now().subtract(const Duration(days: 1)));
+    final yesterday  = _dateKey(DateTime.now().subtract(const Duration(days: 1)));
     if (hasLoggedToday || streak == 0) return false;
     if (lastStreakDate == yesterday) return false;
     final twoDaysAgo = _dateKey(DateTime.now().subtract(const Duration(days: 2)));
-    if (lastStreakDate == twoDaysAgo || (lastStreakDate != null && lastStreakDate != today)) {
+    final today      = _todayKey();
+    if (lastStreakDate == twoDaysAgo ||
+        (lastStreakDate != null && lastStreakDate != today)) {
       if (freezeTokens > 0) {
         freezeTokens -= 1;
-        _saveCore();
+        _save();
         return true;
       } else {
         streak = 0;
-        _saveCore();
+        _save();
         return false;
       }
     }
@@ -735,91 +750,51 @@ class AppState {
   bool useFreeze() {
     if (freezeTokens <= 0) return false;
     freezeTokens -= 1;
-    _saveCore();
+    _save();
     return true;
   }
 
   void _checkFreezeReward() {
     if (streak > 0 && streak % 7 == 0) {
       freezeTokens += 1;
-      _saveCore();
     }
   }
 
   String _dateKey(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2,'0')}-${d.day.toString().padLeft(2,'0')}';
 
-  void _saveWater() {
-    _box.put('waterGlasses',      waterGlasses);
-    _box.put('waterGoalMetToday', waterGoalMetToday);
-    _box.put('waterXpToday',      waterXpToday);
-  }
+  // ---------- DAILY RESET ----------
+  void _resetIfNewDay(String? lastActiveDate) {
+    final today = _todayKey();
+    if (lastActiveDate == today) return;
 
-  // ---------- TODAY MOVEMENTS PERSISTENCE (new) ----------
-  void _loadTodayMovements() {
-    final raw = _box.get('todayMovements', defaultValue: []);
-    todayMovements = (raw as List).map((e) {
-      final m = Map<String, dynamic>.from(e);
-      return MovementLog(
-        type:     m['type']     as String,
-        duration: m['duration'] as int,
-        points:   m['points']   as int,
-      );
-    }).toList();
-  }
+    // Snapshot yesterday's meals into history before clearing
+    if (lastActiveDate != null) {
+      final snapshot = <String, List<FoodItem>>{};
+      for (final type in MealType.values) {
+        if (mealItems[type]!.isNotEmpty) {
+          snapshot[type.name] = List.from(mealItems[type]!);
+        }
+      }
+      if (snackItems.isNotEmpty) snapshot['snacks'] = List.from(snackItems);
+      if (snapshot.isNotEmpty) mealDayHistory[lastActiveDate] = snapshot;
+      // Keep only last 7 days
+      final keys = mealDayHistory.keys.toList()..sort();
+      while (keys.length > 7) { mealDayHistory.remove(keys.removeAt(0)); }
+    }
 
-  void _saveTodayMovements() {
-    _box.put('todayMovements', todayMovements.map((m) => {
-      'type':     m.type,
-      'duration': m.duration,
-      'points':   m.points,
-    }).toList());
-  }
-
-  // ---------- DAILY RESET (new) ----------
-  /// Called once on app open. Clears all per-day fields if the date has changed.
-  void _resetIfNewDay() {
-    final today      = _todayKey();
-    final lastActive = _box.get('lastActiveDate', defaultValue: '');
-
-    if (lastActive == today) return; // same day — nothing to reset
-
-    // ── Mood ──────────────────────────────────────────
-    todayMood       = null;
-    moodLoggedToday = false;
-    _box.put('todayMood',       null);
-    _box.put('moodLoggedToday', false);
-
-    // ── Sleep ─────────────────────────────────────────
+    todayMood        = null;
+    moodLoggedToday  = false;
     sleepHours       = null;
     sleepLoggedToday = false;
-    _box.put('sleepHours',       null);
-    _box.put('sleepLoggedToday', false);
-
-    // ── Water ─────────────────────────────────────────
-    waterGlasses      = 0;
+    waterGlasses     = 0;
     waterGoalMetToday = false;
-    waterXpToday      = 0;
-    _saveWater();
-
-    // ── Meals & snacks ────────────────────────────────
-    for (final type in MealType.values) {
-      mealItems[type] = [];
-    }
-    snackItems = [];
-    _saveMeals();
-    _saveSnacks();
-
-    // ── Today's movements ─────────────────────────────
+    waterXpToday     = 0;
+    for (final type in MealType.values) { mealItems[type] = []; }
+    snackItems     = [];
     todayMovements = [];
-    _saveTodayMovements();
-
-    // ── Streak: if no log yesterday, handled by checkStreakOnOpen ─
-    // (hasLoggedToday intentionally NOT reset here — checkStreakOnOpen uses it)
     hasLoggedToday = false;
-    _box.put('hasLoggedToday', false);
 
-    // ── Record today as last active date ──────────────
-    _box.put('lastActiveDate', today);
+    _doc.set({'lastActiveDate': today}, SetOptions(merge: true));
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../screens/home_screen.dart';
 import '../screens/meals_screen.dart';
 import '../screens/mind_screen.dart';
+import '../screens/leaderboard_screen.dart';
 import '../screens/profile_screen.dart';
 
 class BottomNav extends StatelessWidget {
@@ -14,6 +15,7 @@ class BottomNav extends StatelessWidget {
       const HomeScreen(),
       const MealsScreen(),
       const MindScreen(),
+      const LeaderboardScreen(),
       const ProfileScreen(),
     ];
     Navigator.pushAndRemoveUntil(
@@ -47,8 +49,12 @@ class BottomNav extends StatelessWidget {
           label: 'Mind',
         ),
         BottomNavigationBarItem(
-          icon: Icon(Icons.home),
-          label: 'Home',
+          icon: Icon(Icons.emoji_events),
+          label: 'Ranks',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.person),
+          label: 'Profile',
         ),
       ],
       type: BottomNavigationBarType.fixed,

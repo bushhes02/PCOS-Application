@@ -18,8 +18,8 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _emailCtrl    = TextEditingController();
   final _passwordCtrl = TextEditingController();
-  bool _obscure  = true;
-  bool _loading  = false;
+  bool _obscure = true;
+  bool _loading = false;
   String? _error;
 
   @override
@@ -62,129 +62,138 @@ class _LoginScreenState extends State<LoginScreen> {
     return Scaffold(
       backgroundColor: _bg,
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 28),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
-            const SizedBox(height: 48),
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 28),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
 
-            // Logo placeholder
-            Container(
-              width: 80, height: 80,
-              decoration: BoxDecoration(
-                color: _pink.withOpacity(0.08),
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: _pink.withOpacity(0.2), width: 1.5),
-              ),
-              child: const Center(child: Text('🌸', style: TextStyle(fontSize: 38))),
-            ),
-
-            const SizedBox(height: 28),
-
-            const Text('Welcome back!',
-                style: TextStyle(
-                  fontSize: 26, fontWeight: FontWeight.w800,
-                  color: _ink, letterSpacing: -0.5)),
-            const SizedBox(height: 6),
-            Text('Log in to continue your journey',
-                style: TextStyle(fontSize: 14, color: _ink.withOpacity(0.45))),
-
-            const SizedBox(height: 32),
-
-            // Email field
-            _AuthField(
-              controller: _emailCtrl,
-              hint: 'Email',
-              keyboardType: TextInputType.emailAddress,
-            ),
-            const SizedBox(height: 12),
-
-            // Password field
-            _AuthField(
-              controller: _passwordCtrl,
-              hint: 'Password',
-              obscure: _obscure,
-              suffix: GestureDetector(
-                onTap: () => setState(() => _obscure = !_obscure),
-                child: Icon(
-                  _obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                  size: 20, color: _ink.withOpacity(0.35)),
-              ),
-            ),
-
-            // Error
-            if (_error != null) ...[
-              const SizedBox(height: 12),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: Colors.red.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.red.shade100)),
-                child: Text(_error!,
-                    style: TextStyle(fontSize: 13, color: Colors.red.shade600)),
-              ),
-            ],
-
-            const SizedBox(height: 24),
-
-            // Log in button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _pink,
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: _pink.withOpacity(0.4),
-                  padding: const EdgeInsets.symmetric(vertical: 17),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16)),
-                  elevation: 0,
+                // ── Logo ──────────────────────────────────
+                Image.asset(
+                  'assets/images/logo.png',
+                  width: 160,
+                  fit: BoxFit.contain,
                 ),
-                onPressed: _loading ? null : _login,
-                child: _loading
-                    ? const SizedBox(width: 20, height: 20,
-                        child: CircularProgressIndicator(
-                            color: Colors.white, strokeWidth: 2))
-                    : const Text('Log In',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-              ),
-            ),
 
-            const SizedBox(height: 24),
+                const SizedBox(height: 28),
 
-            // Switch to sign up
-            GestureDetector(
-              onTap: () => Navigator.pushReplacement(context,
-                  MaterialPageRoute(builder: (_) => const SignupScreen())),
-              child: RichText(
-                text: TextSpan(
-                  style: TextStyle(fontSize: 14, color: _ink.withOpacity(0.45)),
-                  children: [
-                    const TextSpan(text: 'Don\'t have an account? '),
-                    TextSpan(
-                      text: 'Sign Up',
-                      style: const TextStyle(
-                        color: _pink, fontWeight: FontWeight.w700,
-                        decoration: TextDecoration.underline,
-                        decorationColor: _pink),
+                const Text('Welcome back!',
+                    style: TextStyle(
+                      fontSize: 26, fontWeight: FontWeight.w800,
+                      color: _ink, letterSpacing: -0.5)),
+                const SizedBox(height: 6),
+                Text('Log in to continue your journey',
+                    style: TextStyle(
+                        fontSize: 14, color: _ink.withOpacity(0.45))),
+
+                const SizedBox(height: 32),
+
+                // ── Email ──────────────────────────────────
+                _AuthField(
+                  controller: _emailCtrl,
+                  hint: 'Email',
+                  keyboardType: TextInputType.emailAddress,
+                ),
+                const SizedBox(height: 12),
+
+                // ── Password ───────────────────────────────
+                _AuthField(
+                  controller: _passwordCtrl,
+                  hint: 'Password',
+                  obscure: _obscure,
+                  suffix: GestureDetector(
+                    onTap: () => setState(() => _obscure = !_obscure),
+                    child: Icon(
+                      _obscure
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
+                      size: 20, color: _ink.withOpacity(0.35)),
+                  ),
+                ),
+
+                // ── Error ──────────────────────────────────
+                if (_error != null) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.red.shade100)),
+                    child: Text(_error!,
+                        style: TextStyle(
+                            fontSize: 13, color: Colors.red.shade600)),
+                  ),
+                ],
+
+                const SizedBox(height: 24),
+
+                // ── Log in button ──────────────────────────
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _pink,
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: _pink.withOpacity(0.4),
+                      padding: const EdgeInsets.symmetric(vertical: 17),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16)),
+                      elevation: 0,
                     ),
-                  ],
+                    onPressed: _loading ? null : _login,
+                    child: _loading
+                        ? const SizedBox(
+                            width: 20, height: 20,
+                            child: CircularProgressIndicator(
+                                color: Colors.white, strokeWidth: 2))
+                        : const Text('Log In',
+                            style: TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.w700)),
+                  ),
                 ),
-              ),
-            ),
 
-            const SizedBox(height: 40),
-          ]),
+                const SizedBox(height: 24),
+
+                // ── Switch to sign up ──────────────────────
+                GestureDetector(
+                  onTap: () => Navigator.pushReplacement(context,
+                      MaterialPageRoute(
+                          builder: (_) => const SignupScreen())),
+                  child: RichText(
+                    text: TextSpan(
+                      style: TextStyle(
+                          fontSize: 14, color: _ink.withOpacity(0.45)),
+                      children: [
+                        const TextSpan(text: 'Don\'t have an account? '),
+                        const TextSpan(
+                          text: 'Sign Up',
+                          style: TextStyle(
+                            color: _pink,
+                            fontWeight: FontWeight.w700,
+                            decoration: TextDecoration.underline,
+                            decorationColor: _pink),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 40),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────
-//  Shared text field widget (used by both auth screens)
-// ─────────────────────────────────────────────────────────
+// ── Shared text field ─────────────────────────────────────
 class _AuthField extends StatelessWidget {
   final TextEditingController controller;
   final String hint;
@@ -205,7 +214,7 @@ class _AuthField extends StatelessWidget {
     decoration: BoxDecoration(
       color: Colors.white,
       borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: const Color(0xFF1E1610).withOpacity(0.1)),
+      border: Border.all(color: _ink.withOpacity(0.1)),
       boxShadow: [BoxShadow(
         color: Colors.black.withOpacity(0.03),
         blurRadius: 8, offset: const Offset(0, 2))],
@@ -218,10 +227,13 @@ class _AuthField extends StatelessWidget {
       decoration: InputDecoration(
         hintText: hint,
         hintStyle: TextStyle(fontSize: 15, color: _ink.withOpacity(0.3)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+        contentPadding: const EdgeInsets.symmetric(
+            horizontal: 18, vertical: 16),
         border: InputBorder.none,
         suffixIcon: suffix != null
-            ? Padding(padding: const EdgeInsets.only(right: 14), child: suffix)
+            ? Padding(
+                padding: const EdgeInsets.only(right: 14),
+                child: suffix)
             : null,
         suffixIconConstraints: const BoxConstraints(),
       ),

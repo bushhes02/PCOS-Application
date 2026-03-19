@@ -14,26 +14,173 @@ class _MealAnalyzerPageState extends State<MealAnalyzerPage> {
   Map<String, dynamic>? _result;
   bool _isLoading = false;
   String? _selectedFood;
+  int _autocompleteKey = 0;  // NEW: Key to force autocomplete rebuild
 
+  // UPDATED: Expanded food list with 148 foods
   final List<String> _availableFoods = [
+    // === GRAINS & STARCHES ===
     'white rice cooked',
     'brown rice cooked',
+    'basmati rice cooked',
+    'jasmine rice cooked',
+    'wild rice cooked',
+    'red rice cooked',
     'white pasta cooked',
+    'whole wheat pasta cooked',
     'quinoa cooked',
     'oats cooked',
+    'steel cut oats cooked',
     'white bread',
+    'whole wheat bread',
+    'sourdough bread',
+    'rye bread',
+    'pita bread white',
+    'naan bread',
+    'tortilla flour',
+    'bagel plain',
+    'english muffin',
+    'cornmeal cooked',
+    'couscous cooked',
+    'bulgur cooked',
+    'barley cooked',
+    'millet cooked',
+    'sweet potato baked',
+    'white potato baked',
+    'french fries',
+    'mashed potato',
+    'potato chips',
+    
+    // === PROTEINS ===
     'chicken breast cooked',
-    'fish cooked',
-    'eggs boiled',
-    'chickpeas cooked',
-    'tofu',
+    'chicken thigh cooked',
+    'turkey breast cooked',
+    'beef lean cooked',
+    'pork chop cooked',
+    'lamb cooked',
+    'bacon cooked',
+    'salmon cooked',
+    'tuna cooked',
+    'cod cooked',
+    'shrimp cooked',
     'prawns cooked',
+    'crab cooked',
+    'tilapia cooked',
+    'sardines canned',
+    'eggs boiled',
+    'eggs scrambled',
+    'egg white cooked',
+    'tofu firm',
+    'tempeh',
+    'seitan',
+    
+    // === LEGUMES ===
+    'chickpeas cooked',
+    'black beans cooked',
+    'kidney beans cooked',
+    'lentils cooked',
+    'red lentils cooked',
+    'split peas cooked',
+    'edamame cooked',
+    
+    // === NUTS & SEEDS ===
+    'peanuts roasted',
+    'almonds',
+    'walnuts',
+    'cashews',
+    'pistachios',
+    'sunflower seeds',
+    'pumpkin seeds',
+    'chia seeds',
+    'flax seeds',
+    'sesame seeds',
+    
+    // === VEGETABLES ===
     'broccoli cooked',
+    'cauliflower cooked',
     'spinach cooked',
+    'kale cooked',
     'cabbage cooked',
+    'brussels sprouts cooked',
     'carrots cooked',
+    'green beans cooked',
+    'asparagus cooked',
+    'bell pepper cooked',
+    'zucchini cooked',
+    'eggplant cooked',
+    'tomato cooked',
+    'cucumber raw',
+    'lettuce raw',
+    'celery raw',
+    'onion cooked',
+    'garlic raw',
+    'mushroom cooked',
+    'beetroot cooked',
+    'pumpkin cooked',
+    'sweet corn cooked',
+    'peas cooked',
+    
+    // === FRUITS ===
     'avocado raw',
-    'plain yogurt',
+    'apple raw',
+    'banana raw',
+    'orange raw',
+    'strawberries raw',
+    'blueberries raw',
+    'grapes raw',
+    'watermelon raw',
+    'mango raw',
+    'pineapple raw',
+    'kiwi raw',
+    'pear raw',
+    'peach raw',
+    'plum raw',
+    'cherries raw',
+    'grapefruit raw',
+    'papaya raw',
+    'cantaloupe raw',
+    'berries mixed',
+    'dates dried',
+    'raisins',
+    
+    // === DAIRY & ALTERNATIVES ===
+    'milk whole',
+    'milk skim',
+    'yogurt plain',
+    'yogurt greek',
+    'cheese cheddar',
+    'cheese mozzarella',
+    'cottage cheese',
+    'cream cheese',
+    'butter',
+    'ice cream vanilla',
+    'soy milk',
+    'almond milk',
+    'coconut milk',
+    'rice milk',
+    
+    // === PREPARED FOODS ===
+    'pizza cheese',
+    'burger beef',
+    'hot dog',
+    'sandwich turkey',
+    'taco',
+    'burrito bean',
+    'sushi roll',
+    'pasta carbonara',
+    'lasagna',
+    'mac and cheese',
+    'fried rice',
+    'stir fry vegetables',
+    'soup vegetable',
+    'hummus',
+    'salsa',
+    'guacamole',
+    'peanut butter',
+    'honey',
+    'maple syrup',
+    'jam strawberry',
+    'chocolate dark',
+    'chocolate milk',
   ];
 
   void _addFood() {
@@ -44,6 +191,7 @@ class _MealAnalyzerPageState extends State<MealAnalyzerPage> {
       _mealItems.add({'food_name': _selectedFood!, 'grams': grams});
       _selectedFood = null;
       _gramsController.clear();
+      _autocompleteKey++;  // Force autocomplete to rebuild and clear
     });
   }
 
@@ -56,8 +204,32 @@ class _MealAnalyzerPageState extends State<MealAnalyzerPage> {
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'meal_items': _mealItems}),
       );
+      
       if (response.statusCode == 200) {
         setState(() { _result = jsonDecode(response.body); _isLoading = false; });
+      } else if (response.statusCode == 400) {
+        // Handle validation errors
+        setState(() => _isLoading = false);
+        final error = jsonDecode(response.body);
+        
+        if (mounted) {
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('⚠️ Cannot Calculate GL'),
+              content: Text(
+                error['message'] ?? 'The formula works best with balanced meals under 80g protein. Try smaller portions!',
+                style: const TextStyle(fontSize: 14),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('OK', style: TextStyle(fontWeight: FontWeight.w600)),
+                ),
+              ],
+            ),
+          );
+        }
       } else {
         setState(() => _isLoading = false);
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(
@@ -92,7 +264,10 @@ class _MealAnalyzerPageState extends State<MealAnalyzerPage> {
   }
 
   @override
-  void dispose() { _gramsController.dispose(); super.dispose(); }
+  void dispose() { 
+    _gramsController.dispose(); 
+    super.dispose(); 
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -134,29 +309,93 @@ class _MealAnalyzerPageState extends State<MealAnalyzerPage> {
             title: 'Add Food',
             emoji: '🍽️',
             child: Column(children: [
-              // Dropdown
-              Container(
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade200)),
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                child: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    value: _selectedFood,
-                    isExpanded: true,
-                    hint: Text('What are we having today? 🍽️',
-                        style: TextStyle(fontSize: 13, color: Colors.grey.shade400)),
-                    icon: Icon(Icons.keyboard_arrow_down, color: Colors.grey.shade400),
-                    items: _availableFoods.map((food) => DropdownMenuItem(
-                      value: food,
-                      child: Text(_capitalize(food),
-                          style: const TextStyle(fontSize: 13)),
-                    )).toList(),
-                    onChanged: (v) => setState(() => _selectedFood = v),
-                  ),
-                ),
+              // FIXED: Autocomplete with key to force rebuild/clear
+              Autocomplete<String>(
+                key: ValueKey(_autocompleteKey),  // Forces rebuild when key changes
+                optionsBuilder: (TextEditingValue textEditingValue) {
+                  if (textEditingValue.text.isEmpty) {
+                    return const Iterable<String>.empty();
+                  }
+                  return _availableFoods.where((String food) {
+                    return food.toLowerCase().contains(
+                      textEditingValue.text.toLowerCase(),
+                    );
+                  });
+                },
+                onSelected: (String selection) {
+                  setState(() {
+                    _selectedFood = selection;
+                  });
+                },
+                fieldViewBuilder: (
+                  BuildContext context,
+                  TextEditingController textEditingController,
+                  FocusNode focusNode,
+                  VoidCallback onFieldSubmitted,
+                ) {
+                  return Container(
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.shade200),
+                    ),
+                    child: TextField(
+                      controller: textEditingController,
+                      focusNode: focusNode,
+                      style: const TextStyle(fontSize: 13),
+                      decoration: InputDecoration(
+                        hintText: 'Search food (e.g., "quinoa", "chicken")... 🔍',
+                        hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade400),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        prefixIcon: Icon(Icons.search, color: Colors.grey.shade400, size: 20),
+                      ),
+                      onChanged: (value) {
+                        if (value.isEmpty) {
+                          setState(() => _selectedFood = null);
+                        }
+                      },
+                    ),
+                  );
+                },
+                optionsViewBuilder: (
+                  BuildContext context,
+                  AutocompleteOnSelected<String> onSelected,
+                  Iterable<String> options,
+                ) {
+                  return Align(
+                    alignment: Alignment.topLeft,
+                    child: Material(
+                      elevation: 4.0,
+                      borderRadius: BorderRadius.circular(12),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 200),
+                        child: ListView.builder(
+                          padding: EdgeInsets.zero,
+                          shrinkWrap: true,
+                          itemCount: options.length,
+                          itemBuilder: (BuildContext context, int index) {
+                            final String option = options.elementAt(index);
+                            return InkWell(
+                              onTap: () {
+                                onSelected(option);
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                child: Text(
+                                  _capitalize(option),
+                                  style: const TextStyle(fontSize: 13),
+                                ),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
+              
               const SizedBox(height: 10),
               // Grams field + Add button
               Row(children: [
@@ -188,61 +427,54 @@ class _MealAnalyzerPageState extends State<MealAnalyzerPage> {
                     height: 46,
                     padding: const EdgeInsets.symmetric(horizontal: 18),
                     decoration: BoxDecoration(
-                      color: Colors.deepPurple,
-                      borderRadius: BorderRadius.circular(12)),
-                    child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                      Icon(Icons.add, color: Colors.white, size: 18),
-                      SizedBox(width: 4),
-                      Text('Add', style: TextStyle(color: Colors.white,
-                          fontWeight: FontWeight.w700, fontSize: 13)),
-                    ]),
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF6A5AE0), Color(0xFF8B7BE8)],
+                        begin: Alignment.topLeft, end: Alignment.bottomRight),
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [BoxShadow(
+                        color: const Color(0xFF6A5AE0).withOpacity(0.3),
+                        blurRadius: 8, offset: const Offset(0, 4))],
+                    ),
+                    child: const Center(
+                      child: Text('Add', style: TextStyle(fontSize: 13,
+                          fontWeight: FontWeight.w700, color: Colors.white)),
+                    ),
                   ),
                 ),
               ]),
             ]),
           ),
 
-          // ── Current meal items ────────────────────────
+          // ── Current meal ──────────────────────────────
           if (_mealItems.isNotEmpty) ...[
             const SizedBox(height: 16),
             _SectionCard(
-              title: 'Chosen Meal:',
-              emoji: '🍽️',
+              title: 'Current Meal',
+              emoji: '📝',
               child: Column(children: [
-                ..._mealItems.asMap().entries.map((entry) {
-                  final i    = entry.key;
-                  final item = entry.value;
+                ...List.generate(_mealItems.length, (i) {
+                  final item = _mealItems[i];
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
                         color: Colors.grey.shade50,
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: Colors.grey.shade200)),
                       child: Row(children: [
-                        Container(
-                          width: 32, height: 32,
-                          decoration: BoxDecoration(
-                            color: Colors.deepPurple.shade50,
-                            borderRadius: BorderRadius.circular(8)),
-                          child: Center(child: Text('${i + 1}',
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
-                                  color: Colors.deepPurple.shade400))),
-                        ),
+                        const Text('•', style: TextStyle(fontSize: 16, color: Colors.deepPurple)),
                         const SizedBox(width: 10),
-                        Expanded(child: Text(_capitalize(item['food_name'] as String),
-                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600))),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.deepPurple.shade50,
-                            borderRadius: BorderRadius.circular(8)),
-                          child: Text('${item['grams']}g',
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
-                                  color: Colors.deepPurple.shade600)),
-                        ),
-                        const SizedBox(width: 6),
+                        Expanded(child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(_capitalize(item['food_name'] as String),
+                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 2),
+                            Text('${item['grams']}g',
+                                style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                          ],
+                        )),
                         GestureDetector(
                           onTap: () => setState(() => _mealItems.removeAt(i)),
                           child: Container(

@@ -71,7 +71,7 @@ class _XpPopupWidgetState extends State<_XpPopupWidget>
     super.initState();
     _ctrl = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 4000), // 4 seconds total
+      duration: const Duration(milliseconds: 3000), // 3 seconds total
     );
 
     // Fade in (0–8%), hold (8–85%), fade out (85–100%)

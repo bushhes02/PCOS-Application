@@ -61,10 +61,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  static const int xpPerLevel = 300;
-  static int levelFromPoints(int pts) => (pts / xpPerLevel).floor() + 1;
-  static int pointsForCurrentLevel(int lvl) => (lvl - 1) * xpPerLevel;
-  static int pointsForNextLevel(int lvl) => lvl * xpPerLevel;
+  static const int _baseXp = 300;
+  static double _xpForLevel(int lvl) => _baseXp * (lvl == 1 ? 1.0 : List.generate(lvl - 1, (i) => 1.0).fold(1.0, (acc, _) => acc));
+
+  // XP needed to complete level N (1-indexed): 300, 330, 363, ...
+  static int xpNeededForLevel(int lvl) {
+    double xp = _baseXp.toDouble();
+    for (int i = 1; i < lvl; i++) xp *= 1.1;
+    return xp.round();
+  }
+
+  static int levelFromPoints(int pts) {
+    int level = 1;
+    int accumulated = 0;
+    while (true) {
+      final needed = xpNeededForLevel(level);
+      if (pts < accumulated + needed) break;
+      accumulated += needed;
+      level++;
+    }
+    return level;
+  }
+
+  static int pointsForCurrentLevel(int pts) {
+    int level = 1;
+    int accumulated = 0;
+    while (true) {
+      final needed = xpNeededForLevel(level);
+      if (pts < accumulated + needed) return accumulated;
+      accumulated += needed;
+      level++;
+    }
+  }
+
+  static int xpPerLevel = 300; // kept for display fallback
 
   static String levelTitle(int level) {
     if (level >= 10) return 'PCOS Champion 🏆';
@@ -130,10 +160,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final user  = FirebaseAuth.instance.currentUser;
     final state = AppState.instance;
     final level              = levelFromPoints(state.points);
-    final currentLevelPoints = pointsForCurrentLevel(level);
-    final nextLevelPoints    = pointsForNextLevel(level);
+    final currentLevelPoints = pointsForCurrentLevel(state.points);
+    final pointsNeeded       = xpNeededForLevel(level);
     final progressInLevel    = state.points - currentLevelPoints;
-    final pointsNeeded       = nextLevelPoints - currentLevelPoints;
+    final nextLevelPoints    = currentLevelPoints + pointsNeeded;
     final levelProgress      = (progressInLevel / pointsNeeded).clamp(0.0, 1.0);
 
     final displayName = user?.displayName ?? user?.email ?? 'User';
@@ -187,8 +217,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ],
       ),
-      bottomNavigationBar: const BottomNav(currentIndex: 3),
-      body: SingleChildScrollView(
+      bottomNavigationBar: const BottomNav(currentIndex: 4),
+      body: Scrollbar(
+        thumbVisibility: true,
+        radius: const Radius.circular(4),
+        thickness: 3,
+        child: SingleChildScrollView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
         child: Column(children: [
 
@@ -196,19 +230,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Stack(alignment: Alignment.center, children: [
-              Positioned(
-                top: 0, right: 0,
-                child: GestureDetector(
-                  onTap: () => _showSettingsSheet(context),
-                  child: Container(
-                    width: 36, height: 36,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFF4826A).withOpacity(0.12),
-                      borderRadius: BorderRadius.circular(10)),
-                    child: const Icon(Icons.settings_outlined, color: Color(0xFFF4826A), size: 18),
-                  ),
-                ),
-              ),
               Column(crossAxisAlignment: CrossAxisAlignment.center, children: [
                 Container(
                   width: 72, height: 72,
@@ -216,8 +237,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     shape: BoxShape.circle,
                     color: const Color(0xFFF4826A).withOpacity(0.15),
                     border: Border.all(color: const Color(0xFFF4826A).withOpacity(0.35), width: 2.5)),
-                  child: Center(child: Text(initial,
-                      style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w700, color: Color(0xFFF4826A)))),
+                  child: state.selectedAvatar != null
+                      ? ClipOval(
+                          child: Image.asset(
+                            state.selectedAvatar!,
+                            fit: BoxFit.cover,
+                            width: 72, height: 72,
+                          ),
+                        )
+                      : Center(child: Text(initial,
+                          style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w700, color: Color(0xFFF4826A)))),
                 ),
                 const SizedBox(height: 10),
                 Text(user?.displayName ?? 'Hey there!',
@@ -257,7 +286,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _Card(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
               Text('Level $level', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-              Text('$progressInLevel / $xpPerLevel XP',
+              Text('$progressInLevel / $pointsNeeded XP',
                   style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
             ]),
             const SizedBox(height: 10),
@@ -366,7 +395,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               : isLocked ? Colors.grey.shade200 : const Color(0xFFFFD6CE),
                           borderRadius: BorderRadius.circular(6)),
                         child: Text(
-                          isCompleted ? 'Earned' : isLocked ? 'Locked' : 'Active',
+                          isCompleted ? 'Earned' : isLocked ? 'Locked' : 'In Progress',
                           style: TextStyle(fontSize: 9, fontWeight: FontWeight.w700,
                               color: isCompleted ? Colors.white
                                   : isLocked ? Colors.grey.shade400
@@ -380,6 +409,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ])),
 
           const SizedBox(height: 12),
+
+          // ── Settings ─────────────────────────────────
+          Container(
+            decoration: BoxDecoration(
+              color: Theme.of(context).cardColor, borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: Colors.grey.shade200),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04),
+                  blurRadius: 10, offset: const Offset(0, 2))],
+            ),
+            child: ListTile(
+              leading: Container(
+                width: 36, height: 36,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF4826A).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10)),
+                child: const Icon(Icons.settings_outlined, color: Color(0xFFF4826A), size: 18),
+              ),
+              title: const Text('Settings', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+              trailing: const Icon(Icons.chevron_right, color: Colors.grey),
+              onTap: () => _showSettingsSheet(context),
+            ),
+          ),
+
+          const SizedBox(height: 10),
 
           // ── Sign out ──────────────────────────────────
           Container(
@@ -401,12 +454,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onTap: () async {
                 await AppState.resetForSignOut();
                 await FirebaseAuth.instance.signOut();
-                Navigator.pushAndRemoveUntil(context,
-                    MaterialPageRoute(builder: (_) => const WelcomeScreen()), (_) => false);
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  PageRouteBuilder(
+                    pageBuilder: (_, __, ___) => const WelcomeScreen(),
+                    transitionDuration: Duration.zero,
+                    reverseTransitionDuration: Duration.zero,
+                    transitionsBuilder: (_, __, ___, child) => child,
+                  ),
+                  (_) => false,
+                );
               },
             ),
           ),
         ]),
+      ),
       ),
     ); },
     );

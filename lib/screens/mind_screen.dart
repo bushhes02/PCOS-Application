@@ -11,8 +11,15 @@ class MindScreen extends StatefulWidget {
 
 class _MindScreenState extends State<MindScreen> {
   final state = AppState.instance;
+  late DateTime _displayedMonth;
 
-  // ── Mood popup ────────────────────────────────────────
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _displayedMonth = DateTime(now.year, now.month);
+  }
+
   void _showMoodPicker() {
     showModalBottomSheet(
       context: context,
@@ -32,7 +39,7 @@ class _MindScreenState extends State<MindScreen> {
                 onTap: () {
                   setState(() => state.logMood(mood['label']!));
                   Navigator.pop(context);
-                  XpPopup.show(context, '+2 XP ⭐ Mood logged!');
+                  XpPopup.show(context, '+2 XP ⭐');
                 },
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 150),
@@ -93,7 +100,7 @@ class _MindScreenState extends State<MindScreen> {
                 onPressed: () {
                   setState(() => state.logSleep(selectedHours));
                   Navigator.pop(context);
-                  XpPopup.show(context, '+2 XP ⭐ Sleep logged!');
+                  XpPopup.show(context, '+2 XP ⭐');
                 },
                 child: const Text('Save', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
               ),
@@ -211,51 +218,49 @@ class _MindScreenState extends State<MindScreen> {
       orElse: () => {'emoji': '😊', 'label': ''},
     );
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: logged ? Colors.orange.shade200 : Colors.grey.shade200),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 2))],
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.center,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        const Align(
-          alignment: Alignment.topCenter,
-          child: Text('Mood', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+    return GestureDetector(
+      onDoubleTap: logged ? _showMoodPicker : null,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: logged ? Colors.orange.shade200 : Colors.grey.shade200),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 2))],
         ),
-        const SizedBox(height: 12),
-        if (logged) ...[
-          Align(
-            alignment: Alignment.topRight,
-            child: GestureDetector(
-              onTap: () => setState(() => state.logMood(state.todayMood!)),
-              child: Icon(Icons.close, size: 14, color: Colors.grey.shade400),
-            ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          const Align(
+            alignment: Alignment.topCenter,
+            child: Text('Mood', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
           ),
-          const SizedBox(height: 4),
-          Text(mood['emoji']!, style: const TextStyle(fontSize: 38)),
-          const SizedBox(height: 4),
-          Text(mood['label']!, style: const TextStyle(fontSize: 13,
-              fontWeight: FontWeight.w700, color: Color(0xFFB85A47))),
-        ] else ...[
-          const SizedBox(height: 4),
-          GestureDetector(
-            onTap: _showMoodPicker,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF4826A),
-                borderRadius: BorderRadius.circular(12)),
-              child: const Text('+ Log Mood',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
+          const SizedBox(height: 12),
+          if (logged) ...[
+            Text(mood['emoji']!, style: const TextStyle(fontSize: 38)),
+            const SizedBox(height: 4),
+            Text(mood['label']!, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700,
+                color: Color(0xFFB85A47))),
+            const SizedBox(height: 4),
+            Text('Double-tap to edit', style: TextStyle(fontSize: 9,
+                color: Colors.grey.shade400)),
+          ] else ...[
+            const SizedBox(height: 4),
+            GestureDetector(
+              onTap: _showMoodPicker,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF4826A),
+                  borderRadius: BorderRadius.circular(12)),
+                child: const Text('+ Log Mood',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
-        ],
-      ]),
+            const SizedBox(height: 4),
+          ],
+        ]),
+      ),
     );
   }
 
@@ -264,63 +269,66 @@ class _MindScreenState extends State<MindScreen> {
     final logged = state.sleepLoggedToday;
     final hours = state.sleepHours;
 
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: logged ? Colors.indigo.shade200 : Colors.grey.shade200),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 2))],
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.center,
-          mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        const Align(
-          alignment: Alignment.topCenter,
-          child: Text('Sleep', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+    return GestureDetector(
+      onDoubleTap: logged ? _showSleepPicker : null,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: logged ? Colors.indigo.shade200 : Colors.grey.shade200),
+          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 2))],
         ),
-        const SizedBox(height: 12),
-        if (logged && hours != null) ...[
-          Align(
-            alignment: Alignment.topRight,
-            child: GestureDetector(
-              onTap: () => setState(() => state.clearSleep()),
-              child: Icon(Icons.close, size: 14, color: Colors.grey.shade400),
-            ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          const Align(
+            alignment: Alignment.topCenter,
+            child: Text('Sleep', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
           ),
-          const SizedBox(height: 4),
-          Text('${hours.toStringAsFixed(1)} hrs',
-              style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800,
-                  color: Colors.indigo.shade600, height: 1)),
-          const SizedBox(height: 4),
-          Text(state.sleepQualityLabel,
-              style: TextStyle(fontSize: 10, color: Colors.grey.shade500)),
-        ] else ...[
-          const SizedBox(height: 4),
-          GestureDetector(
-            onTap: _showSleepPicker,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                color: const Color(0xFFF4826A),
-                borderRadius: BorderRadius.circular(12)),
-              child: const Text('+ Log Sleep',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
+          const SizedBox(height: 12),
+          if (logged && hours != null) ...[
+            Text('${hours.toStringAsFixed(1)} hrs',
+                style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800,
+                    color: Colors.indigo.shade600, height: 1)),
+            const SizedBox(height: 4),
+            Text(state.sleepQualityLabel,
+                style: TextStyle(fontSize: 10, color: Colors.grey.shade500)),
+            const SizedBox(height: 4),
+            Text('Double-tap to edit', style: TextStyle(fontSize: 9,
+                color: Colors.grey.shade400)),
+          ] else ...[
+            const SizedBox(height: 4),
+            GestureDetector(
+              onTap: _showSleepPicker,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF4826A),
+                  borderRadius: BorderRadius.circular(12)),
+                child: const Text('+ Log Sleep',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.white)),
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
-        ],
-      ]),
+            const SizedBox(height: 4),
+          ],
+        ]),
+      ),
     );
   }
 
   // ── Journal Card with Calendar ────────────────────────
   Widget _buildJournalCard() {
     final now = DateTime.now();
-    final firstOfMonth = DateTime(now.year, now.month, 1);
-    final daysInMonth = DateTime(now.year, now.month + 1, 0).day;
+    final today = DateTime(now.year, now.month, now.day);
+    final firstOfMonth = DateTime(_displayedMonth.year, _displayedMonth.month, 1);
+    final daysInMonth = DateTime(_displayedMonth.year, _displayedMonth.month + 1, 0).day;
     final startOffset = (firstOfMonth.weekday - 1) % 7;
     final rowCount = ((startOffset + daysInMonth) / 7).ceil();
+
+    // Can't go before January of this year, can't go past current month
+    final canGoPrev = _displayedMonth.isAfter(DateTime(now.year, 1));
+    final canGoNext = _displayedMonth.isBefore(DateTime(now.year, now.month));
 
     return Container(
       decoration: BoxDecoration(
@@ -350,8 +358,27 @@ class _MindScreenState extends State<MindScreen> {
               const SizedBox(width: 9),
               const Text('Journal', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700)),
               const Spacer(),
-              Text('${_monthName(now.month)} ${now.year}',
+              // Month navigation
+              GestureDetector(
+                onTap: canGoPrev ? () => setState(() {
+                  _displayedMonth = DateTime(_displayedMonth.year, _displayedMonth.month - 1);
+                }) : null,
+                child: Icon(Icons.chevron_left,
+                    size: 20,
+                    color: canGoPrev ? const Color(0xFFF4826A) : Colors.grey.shade300),
+              ),
+              const SizedBox(width: 4),
+              Text('${_monthName(_displayedMonth.month)} ${_displayedMonth.year}',
                   style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey.shade500)),
+              const SizedBox(width: 4),
+              GestureDetector(
+                onTap: canGoNext ? () => setState(() {
+                  _displayedMonth = DateTime(_displayedMonth.year, _displayedMonth.month + 1);
+                }) : null,
+                child: Icon(Icons.chevron_right,
+                    size: 20,
+                    color: canGoNext ? const Color(0xFFF4826A) : Colors.grey.shade300),
+              ),
             ]),
             const SizedBox(height: 8),
             // Day-of-week labels
@@ -370,11 +397,14 @@ class _MindScreenState extends State<MindScreen> {
                     final day = row * 7 + col - startOffset + 1;
                     if (day < 1 || day > daysInMonth) return SizedBox(width: cellSize);
 
-                    final date    = DateTime(now.year, now.month, day);
-                    final isToday = day == now.day;
-                    final isFuture = date.isAfter(DateTime(now.year, now.month, now.day));
+                    final date     = DateTime(_displayedMonth.year, _displayedMonth.month, day);
+                    final isToday  = date == today;
+                    final isFuture = date.isAfter(today);
                     final hasEntry = state.getEntryForDate(date) != null;
-                    final inner   = (rowHeight * 0.78).clamp(24.0, 46.0);
+                    final inner    = (rowHeight * 0.78).clamp(24.0, 46.0);
+                    // For past months, allow viewing but not editing
+                    final isCurrentMonth = _displayedMonth.year == now.year &&
+                        _displayedMonth.month == now.month;
 
                     return GestureDetector(
                       onTap: isFuture ? null : () => _openJournalForDate(date),
@@ -421,8 +451,8 @@ class _MindScreenState extends State<MindScreen> {
     );
   }
 
-  String _monthName(int m) => const ['','January','February','March','April','May','June',
-      'July','August','September','October','November','December'][m];
+  String _monthName(int m) => const ['','Jan','Feb','Mar','Apr','May','Jun',
+      'Jul','Aug','Sep','Oct','Nov','Dec'][m];
 }
 
 // ── Journal Screen ────────────────────────────────────────
@@ -457,7 +487,7 @@ class _JournalScreenState extends State<_JournalScreen> {
     if (_controller.text.trim().isEmpty) return;
     widget.onSave?.call(_controller.text.trim());
     Navigator.pop(context);
-    XpPopup.show(context, '+5 XP ⭐ Journal saved!');
+    XpPopup.show(context, '+5 XP ⭐');
   }
 
   void _confirmDelete() {
